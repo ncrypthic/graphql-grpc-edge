@@ -1,0 +1,105 @@
+package {{.PackageName}}
+
+import (
+	"errors"
+
+	"github.com/mitchellh/mapstructure"
+	graphql "gopkg.in/graphql-go/graphql.v0"
+)
+{{ range $input := .Inputs }}
+var GraphQL_Input{{$input.MessageName}} *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
+	Name: "{{$input.MessageName}}",
+	Fields: graphql.Fields{
+		{{- range $field := $input.MessageBody.Fields -}}
+		{{ $type := GetTypeInfo $input $field }}
+		"{{$field.FieldName}}": &graphql.Field{
+			Name: "{{ $field.FieldName }}",
+			Type: {{ if $type.IsRepeated -}} graphql.NewList( {{- end -}}
+                            {{- if $type.IsScalar -}} {{- $type.Name -}}
+                            {{- else if $type.IsEnum -}} GraphQL_{{- $type.Name -}}Enum
+                            {{- else -}} GraphQL_Input{{- $type.Name -}} {{- end -}}
+                        {{- if $type.IsRepeated -}} ) {{- end -}},
+		},
+		{{- end }}
+	},
+})
+
+{{ end }}
+{{- range $output := .Objects }}
+var GraphQL_{{$output.MessageName}} *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
+	Name: "{{$output.MessageName}}",
+	Fields: graphql.Fields{
+		{{- range $field := $output.MessageBody.Fields -}}
+		{{ $type := GetTypeInfo $output $field }}
+		"{{$field.FieldName}}": &graphql.Field{
+			Name: "{{ $field.FieldName }}",
+			Type: {{if $type.IsRepeated -}} graphql.NewList( {{- end -}}
+                            {{- if $type.IsScalar -}} {{- $type.Name -}}
+                            {{- else if $type.IsEnum -}} GraphQL_{{- $type.Name -}}Enum
+                            {{- else -}} GraphQL_{{- $type.Name -}} {{- end -}}
+                            {{- if $type.IsRepeated -}} ) {{- end -}},
+		},
+		{{- end }}
+		{{- range $union := $output.MessageBody.Oneofs -}}
+		"{{$union.OneofName}}": &graphql.Field{
+			Name: "{{ $union.OneofName }}",
+			Type: GraphQL_{{ $output.MessageName }}_{{ $union.OneofName }}Union,
+		},
+		{{- end }}
+	},
+})
+
+{{ end }}
+{{- range $name,$enum := .Enums }}
+var GraphQL_{{$name}}Enum *graphql.Enum = graphql.NewEnum(graphql.EnumConfig{
+	Name: "{{$name}}Enum",
+	Values: graphql.EnumValueConfigMap{
+		{{- range $enumField := $enum.EnumBody.EnumFields }}
+		"{{$enumField.Ident}}": &graphql.EnumValueConfig{
+			Value: "{{$enumField.Ident}}",
+		},
+		{{- end }}
+	},
+})
+{{ end }}
+{{- range $name,$union := .Unions }}
+var GraphQL_{{$name}}Union *graphql.Union = graphql.NewUnion(graphql.UnionConfig{
+	Name: "{{$name}}Union",
+	Types: []*graphql.Object{
+		{{- range $unionField := $union.OneofFields }}
+		GraphQL_{{$unionField.Type}},
+		{{- end }}
+	},
+})
+{{ end }}
+
+{{- $queries := .Queries -}}
+{{ range $svc := .Services }}
+func Register{{$svc.ServiceName}}Queries(queries graphql.Fields, sc {{$svc.ServiceName}}Client) error {
+	{{- range $name,$query := $queries }}
+	queries["{{$name}}"] = &graphql.Field{
+		Name: "{{$name}}",
+		Args: graphql.FieldConfigArgument{
+			"input": &graphql.ArgumentConfig{
+				Type: GraphQL_Input{{$query.RPCRequest.MessageType}},
+			},
+		},
+		Type: GraphQL_{{$query.RPCResponse.MessageType}},
+		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+			inputArgs, ok := p.Args["input"].(map[string]interface{})
+			if !ok || inputArgs == nil {
+				return nil, errors.New("Missing required parameter `input`")
+			}
+			var req {{$query.RPCRequest.MessageType}}
+			mapErr := mapstructure.Decode(inputArgs, &req)
+			if mapErr != nil {
+				return nil, mapErr
+			}
+			return sc.{{title $name}}(p.Context, &req)
+		},
+	}
+	{{- end }}
+
+	return nil
+}
+{{ end }}

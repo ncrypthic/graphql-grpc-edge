@@ -1,0 +1,54 @@
+syntax="proto3";
+
+import "graphql.proto";
+
+package sample;
+
+enum HelloType {
+    NONE = 1;
+    ANY = 2;
+}
+
+message Error {
+    string error_message = 1;
+}
+
+message Hello {
+    string name = 1;
+    HelloType type = 2;
+    repeated string messages = 3;
+}
+
+message ServerError {
+    int32 code = 1;
+    string decription = 2;
+}
+
+message FieldValidationError {
+    string field = 1;
+    string error = 2;
+}
+
+message ValidationError {
+    repeated FieldValidationError fields = 1;
+}
+
+message HelloResponse {
+    Hello data = 1;
+    oneof error {
+        ServerError exception = 2;
+        ValidationError form_error = 3;
+    };
+}
+
+message HelloRequest {
+    string name = 1;
+}
+
+service HelloService {
+    rpc Greeting(Hello) returns (HelloResponse) {
+        option (graphql.type) = {
+            query: "greeting"
+        };
+    }
+}
