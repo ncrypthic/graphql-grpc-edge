@@ -1,6 +1,6 @@
 syntax="proto3";
 
-import "graphql.proto";
+import "../../proto/graphql.proto";
 
 package sample;
 
