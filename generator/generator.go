@@ -3,7 +3,7 @@ package generator
 import (
 	"strings"
 
-	"github.com/ncrypthic/graphql-edge/graphql/generator/funcs"
+	"github.com/ncrypthic/graphql-edge/generator/funcs"
 	protoparser "github.com/yoheimuta/go-protoparser"
 	"github.com/yoheimuta/go-protoparser/interpret/unordered"
 	"github.com/yoheimuta/go-protoparser/parser"
@@ -89,7 +89,7 @@ func (g *generator) FromProto(p *parser.Proto) error {
 				if op == "query" {
 					g.Queries[opName] = rpc
 				} else if op == "mutation" {
-					g.Queries[opName] = rpc
+					g.Mutations[opName] = rpc
 				}
 				if _, ok := g.Inputs[rpc.RPCRequest.MessageType]; !ok {
 					g.Inputs[rpc.RPCRequest.MessageType] = funcs.LookUpMessage(rpc.RPCRequest.MessageType, proto.ProtoBody)

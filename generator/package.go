@@ -4,14 +4,13 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"os"
 	"text/template"
 
-	"github.com/ncrypthic/graphql-edge/graphql/generator/funcs"
+	"github.com/ncrypthic/graphql-edge/generator/funcs"
 	protoparser "github.com/yoheimuta/go-protoparser"
 )
 
-func Generate(src io.Reader) error {
+func Generate(src io.Reader, dst io.Writer) error {
 	g := NewGenerator(DefaultNameGenerator)
 	proto, err := protoparser.Parse(src)
 	if err != nil {
@@ -41,9 +40,5 @@ func Generate(src io.Reader) error {
 	if err != nil {
 		return err
 	}
-	output, err := os.Create("../sample.edge.go")
-	if err != nil {
-		return err
-	}
-	return tmpl.Execute(output, g)
+	return tmpl.Execute(dst, g)
 }

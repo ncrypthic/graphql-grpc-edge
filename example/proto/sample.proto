@@ -51,4 +51,10 @@ service HelloService {
             query: "greeting"
         };
     }
+
+    rpc SetGreeting(Hello) returns (HelloResponse) {
+        option (graphql.type) = {
+            mutation: "setGreeting"
+        };
+    }
 }

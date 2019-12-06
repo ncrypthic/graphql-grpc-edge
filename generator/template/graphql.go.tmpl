@@ -4,16 +4,15 @@ import (
 	"errors"
 
 	"github.com/mitchellh/mapstructure"
-	graphql "gopkg.in/graphql-go/graphql.v0"
+	graphql "github.com/graphql-go/graphql"
 )
 {{ range $input := .Inputs }}
 var GraphQL_Input{{$input.MessageName}} *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
-	Name: "{{$input.MessageName}}",
-	Fields: graphql.Fields{
+	Name: "Input{{$input.MessageName}}",
+	Fields: graphql.InputObjectConfigFieldMap{
 		{{- range $field := $input.MessageBody.Fields -}}
 		{{ $type := GetTypeInfo $input $field }}
-		"{{$field.FieldName}}": &graphql.Field{
-			Name: "{{ $field.FieldName }}",
+		"{{$field.FieldName}}": &graphql.InputObjectFieldConfig{
 			Type: {{ if $type.IsRepeated -}} graphql.NewList( {{- end -}}
                             {{- if $type.IsScalar -}} {{- $type.Name -}}
                             {{- else if $type.IsEnum -}} GraphQL_{{- $type.Name -}}Enum
@@ -28,6 +27,9 @@ var GraphQL_Input{{$input.MessageName}} *graphql.InputObject = graphql.NewInputO
 {{- range $output := .Objects }}
 var GraphQL_{{$output.MessageName}} *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
 	Name: "{{$output.MessageName}}",
+	IsTypeOf: func(p graphql.IsTypeOfParams) bool {
+		return true
+	},
 	Fields: graphql.Fields{
 		{{- range $field := $output.MessageBody.Fields -}}
 		{{ $type := GetTypeInfo $output $field }}
@@ -74,6 +76,7 @@ var GraphQL_{{$name}}Union *graphql.Union = graphql.NewUnion(graphql.UnionConfig
 {{ end }}
 
 {{- $queries := .Queries -}}
+{{- $mutations := .Mutations -}}
 {{ range $svc := .Services }}
 func Register{{$svc.ServiceName}}Queries(queries graphql.Fields, sc {{$svc.ServiceName}}Client) error {
 	{{- range $name,$query := $queries }}
@@ -102,4 +105,46 @@ func Register{{$svc.ServiceName}}Queries(queries graphql.Fields, sc {{$svc.Servi
 
 	return nil
 }
+
+func Register{{$svc.ServiceName}}Mutations(mutations graphql.Fields, sc {{$svc.ServiceName}}Client) error {
+	{{- range $name,$mutation := $mutations }}
+	mutations["{{$name}}"] = &graphql.Field{
+		Name: "{{$name}}",
+		Args: graphql.FieldConfigArgument{
+			"input": &graphql.ArgumentConfig{
+				Type: GraphQL_Input{{$mutation.RPCRequest.MessageType}},
+			},
+		},
+		Type: GraphQL_{{$mutation.RPCResponse.MessageType}},
+		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+			inputArgs, ok := p.Args["input"].(map[string]interface{})
+			if !ok || inputArgs == nil {
+				return nil, errors.New("Missing required parameter `input`")
+			}
+			var req {{$mutation.RPCRequest.MessageType}}
+			mapErr := mapstructure.Decode(inputArgs, &req)
+			if mapErr != nil {
+				return nil, mapErr
+			}
+			return sc.{{title $name}}(p.Context, &req)
+		},
+	}
+	{{- end }}
+	return nil
+}
 {{ end }}
+
+func RegisterGraphQLTypes(types []graphql.Type) {
+	{{- range $input := .Inputs }}
+	types = append(types, GraphQL_Input{{$input.MessageName}})
+	{{- end }}
+	{{- range $output := .Objects }}
+	types = append(types, GraphQL_{{$output.MessageName}})
+	{{- end }}
+	{{- range $name,$enum := .Enums }}
+	types = append(types, GraphQL_{{$name}}Enum)
+	{{- end }}
+	{{- range $name,$union := .Unions }}
+	types = append(types, GraphQL_{{$name}}Union)
+	{{- end }}
+}
