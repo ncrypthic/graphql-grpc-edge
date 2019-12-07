@@ -1,0 +1,16 @@
+syntax="proto2";
+
+import "google/protobuf/descriptor.proto";
+
+package graphql;
+
+message GraphQLOption{
+    oneof type {
+        string query = 1;
+        string mutation = 2;
+    }
+}
+
+extend google.protobuf.MethodOptions {
+    optional GraphQLOption type = 50001;
+}

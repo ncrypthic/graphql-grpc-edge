@@ -1,0 +1,5 @@
+vendor/*
+*.bak
+*~
+*.temp
+*.orig
