@@ -1,6 +1,6 @@
 # graphql-grpc-edge
 
-This repo is an experimental work to automatically generate graphql server
+This repo is an **EXPERIMENTAL** work to automatically generate graphql server
 as aggregate server to serve gRPC backed service.
 
 ## 1. Background
