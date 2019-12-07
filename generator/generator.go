@@ -3,7 +3,7 @@ package generator
 import (
 	"strings"
 
-	"github.com/ncrypthic/graphql-edge/generator/funcs"
+	"github.com/ncrypthic/graphql-grpc-edge/generator/funcs"
 	protoparser "github.com/yoheimuta/go-protoparser"
 	"github.com/yoheimuta/go-protoparser/interpret/unordered"
 	"github.com/yoheimuta/go-protoparser/parser"

@@ -7,7 +7,7 @@ import (
 
 	graphql "github.com/graphql-go/graphql"
 	"github.com/graphql-go/handler"
-	"github.com/ncrypthic/graphql-edge/example/sample"
+	"github.com/ncrypthic/graphql-grpc-edge/example/sample"
 	grpc "google.golang.org/grpc"
 )
 

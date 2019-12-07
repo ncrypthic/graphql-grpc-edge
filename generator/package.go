@@ -6,7 +6,7 @@ import (
 	"log"
 	"text/template"
 
-	"github.com/ncrypthic/graphql-edge/generator/funcs"
+	"github.com/ncrypthic/graphql-grpc-edge/generator/funcs"
 	protoparser "github.com/yoheimuta/go-protoparser"
 )
 
