@@ -1,9 +1,9 @@
 package sample
 
 import (
-	"errors"
+	"encoding/json"
 
-	"github.com/mitchellh/mapstructure"
+	"github.com/golang/protobuf/jsonpb"
 	graphql "github.com/graphql-go/graphql"
 )
 
@@ -98,6 +98,14 @@ var GraphQL_Error *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
 		"error_message": &graphql.Field{
 			Name: "error_message",
 			Type: graphql.String,
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				if pdata, ok := p.Source.(*Error); ok {
+					return pdata.ErrorMessage, nil
+				} else if data, ok := p.Source.(Error); ok {
+					return data.ErrorMessage, nil
+				}
+				return nil, nil
+			},
 		},
 	},
 })
@@ -112,10 +120,26 @@ var GraphQL_FieldValidationError *graphql.Object = graphql.NewObject(graphql.Obj
 		"field": &graphql.Field{
 			Name: "field",
 			Type: graphql.String,
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				if pdata, ok := p.Source.(*FieldValidationError); ok {
+					return pdata.Field, nil
+				} else if data, ok := p.Source.(FieldValidationError); ok {
+					return data.Field, nil
+				}
+				return nil, nil
+			},
 		},
 		"error": &graphql.Field{
 			Name: "error",
 			Type: graphql.String,
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				if pdata, ok := p.Source.(*FieldValidationError); ok {
+					return pdata.Error, nil
+				} else if data, ok := p.Source.(FieldValidationError); ok {
+					return data.Error, nil
+				}
+				return nil, nil
+			},
 		},
 	},
 })
@@ -130,14 +154,38 @@ var GraphQL_Hello *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
 		"name": &graphql.Field{
 			Name: "name",
 			Type: graphql.String,
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				if pdata, ok := p.Source.(*Hello); ok {
+					return pdata.Name, nil
+				} else if data, ok := p.Source.(Hello); ok {
+					return data.Name, nil
+				}
+				return nil, nil
+			},
 		},
 		"type": &graphql.Field{
 			Name: "type",
 			Type: GraphQL_HelloTypeEnum,
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				if pdata, ok := p.Source.(*Hello); ok {
+					return pdata.Type, nil
+				} else if data, ok := p.Source.(Hello); ok {
+					return data.Type, nil
+				}
+				return nil, nil
+			},
 		},
 		"messages": &graphql.Field{
 			Name: "messages",
 			Type: graphql.NewList(graphql.String),
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				if pdata, ok := p.Source.(*Hello); ok {
+					return pdata.Messages, nil
+				} else if data, ok := p.Source.(Hello); ok {
+					return data.Messages, nil
+				}
+				return nil, nil
+			},
 		},
 	},
 })
@@ -152,6 +200,14 @@ var GraphQL_HelloRequest *graphql.Object = graphql.NewObject(graphql.ObjectConfi
 		"name": &graphql.Field{
 			Name: "name",
 			Type: graphql.String,
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				if pdata, ok := p.Source.(*HelloRequest); ok {
+					return pdata.Name, nil
+				} else if data, ok := p.Source.(HelloRequest); ok {
+					return data.Name, nil
+				}
+				return nil, nil
+			},
 		},
 	},
 })
@@ -166,6 +222,14 @@ var GraphQL_HelloResponse *graphql.Object = graphql.NewObject(graphql.ObjectConf
 		"data": &graphql.Field{
 			Name: "data",
 			Type: GraphQL_Hello,
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				if pdata, ok := p.Source.(*HelloResponse); ok {
+					return pdata.Data, nil
+				} else if data, ok := p.Source.(HelloResponse); ok {
+					return data.Data, nil
+				}
+				return nil, nil
+			},
 		},"error": &graphql.Field{
 			Name: "error",
 			Type: GraphQL_HelloResponse_errorUnion,
@@ -183,10 +247,26 @@ var GraphQL_ServerError *graphql.Object = graphql.NewObject(graphql.ObjectConfig
 		"code": &graphql.Field{
 			Name: "code",
 			Type: graphql.Int,
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				if pdata, ok := p.Source.(*ServerError); ok {
+					return pdata.Code, nil
+				} else if data, ok := p.Source.(ServerError); ok {
+					return data.Code, nil
+				}
+				return nil, nil
+			},
 		},
 		"decription": &graphql.Field{
 			Name: "decription",
 			Type: graphql.String,
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				if pdata, ok := p.Source.(*ServerError); ok {
+					return pdata.Decription, nil
+				} else if data, ok := p.Source.(ServerError); ok {
+					return data.Decription, nil
+				}
+				return nil, nil
+			},
 		},
 	},
 })
@@ -201,6 +281,14 @@ var GraphQL_ValidationError *graphql.Object = graphql.NewObject(graphql.ObjectCo
 		"fields": &graphql.Field{
 			Name: "fields",
 			Type: graphql.NewList(GraphQL_FieldValidationError),
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				if pdata, ok := p.Source.(*ValidationError); ok {
+					return pdata.Fields, nil
+				} else if data, ok := p.Source.(ValidationError); ok {
+					return data.Fields, nil
+				}
+				return nil, nil
+			},
 		},
 	},
 })
@@ -210,10 +298,10 @@ var GraphQL_HelloTypeEnum *graphql.Enum = graphql.NewEnum(graphql.EnumConfig{
 	Name: "HelloTypeEnum",
 	Values: graphql.EnumValueConfigMap{
 		"NONE": &graphql.EnumValueConfig{
-			Value: "NONE",
+			Value: HelloType_NONE,
 		},
 		"ANY": &graphql.EnumValueConfig{
-			Value: "ANY",
+			Value: HelloType_ANY,
 		},
 	},
 })
@@ -236,14 +324,14 @@ func RegisterHelloServiceQueries(queries graphql.Fields, sc HelloServiceClient) 
 		},
 		Type: GraphQL_HelloResponse,
 		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-			inputArgs, ok := p.Args["input"].(map[string]interface{})
-			if !ok || inputArgs == nil {
-				return nil, errors.New("Missing required parameter `input`")
-			}
 			var req Hello
-			mapErr := mapstructure.Decode(inputArgs, &req)
-			if mapErr != nil {
-				return nil, mapErr
+			rawJson, err := json.Marshal(p.Args["input"])
+			if err != nil {
+				return nil, err
+			}
+			jsonpb.UnmarshalString(string(rawJson), &req)
+			if err != nil {
+				return nil, err
 			}
 			return sc.Greeting(p.Context, &req)
 		},
@@ -262,14 +350,14 @@ func RegisterHelloServiceMutations(mutations graphql.Fields, sc HelloServiceClie
 		},
 		Type: GraphQL_HelloResponse,
 		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-			inputArgs, ok := p.Args["input"].(map[string]interface{})
-			if !ok || inputArgs == nil {
-				return nil, errors.New("Missing required parameter `input`")
-			}
 			var req Hello
-			mapErr := mapstructure.Decode(inputArgs, &req)
-			if mapErr != nil {
-				return nil, mapErr
+			rawJson, err := json.Marshal(p.Args["input"])
+			if err != nil {
+				return nil, err
+			}
+			jsonpb.UnmarshalString(string(rawJson), &req)
+			if err != nil {
+				return nil, err
 			}
 			return sc.SetGreeting(p.Context, &req)
 		},

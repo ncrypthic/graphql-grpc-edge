@@ -1,12 +1,12 @@
 syntax="proto3";
 
-import "../../proto/graphql.proto";
+import "graphql-edge/proto/graphql.proto";
 
 package sample;
 
 enum HelloType {
-    NONE = 1;
-    ANY = 2;
+    NONE = 0;
+    ANY = 1;
 }
 
 message Error {

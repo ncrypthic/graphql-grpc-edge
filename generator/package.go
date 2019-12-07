@@ -27,9 +27,9 @@ func Generate(src io.Reader, dst io.Writer) error {
 		"lcfirst":       funcs.LCFirst,
 		"ucfirst":       funcs.UCFirst,
 		"concat":        funcs.Concat,
-		"title":         funcs.Title,
 		"lookUpMessage": funcs.LookUpMessage,
 		"GetTypeInfo":   g.GetTypeInfo,
+		"GetFieldName":  g.GetFieldName,
 	})
 	rawTmpl, err := ioutil.ReadFile("./template/graphql.go.tmpl")
 	if err != nil {

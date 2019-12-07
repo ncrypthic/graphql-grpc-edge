@@ -42,6 +42,7 @@ type TypeInfo struct {
 type Generator interface {
 	FromProto(*parser.Proto) error
 	GetTypeInfo(*unordered.Message, *parser.Field) *TypeInfo
+	GetFieldName(string) string
 }
 
 type generator struct {
@@ -162,4 +163,13 @@ func (g *generator) GetTypeInfo(msg *unordered.Message, field *parser.Field) *Ty
 		info.IsEnum = isEnum
 		return info
 	}
+}
+
+func (g *generator) GetFieldName(s string) string {
+	segments := strings.Split(s, "_")
+	res := ""
+	for _, segment := range segments {
+		res = res + strings.Title(segment)
+	}
+	return res
 }

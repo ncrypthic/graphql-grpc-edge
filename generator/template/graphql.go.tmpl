@@ -1,9 +1,9 @@
 package {{.PackageName}}
 
 import (
-	"errors"
+	"encoding/json"
 
-	"github.com/mitchellh/mapstructure"
+	"github.com/golang/protobuf/jsonpb"
 	graphql "github.com/graphql-go/graphql"
 )
 {{ range $input := .Inputs }}
@@ -14,10 +14,10 @@ var GraphQL_Input{{$input.MessageName}} *graphql.InputObject = graphql.NewInputO
 		{{ $type := GetTypeInfo $input $field }}
 		"{{$field.FieldName}}": &graphql.InputObjectFieldConfig{
 			Type: {{ if $type.IsRepeated -}} graphql.NewList( {{- end -}}
-                            {{- if $type.IsScalar -}} {{- $type.Name -}}
-                            {{- else if $type.IsEnum -}} GraphQL_{{- $type.Name -}}Enum
-                            {{- else -}} GraphQL_Input{{- $type.Name -}} {{- end -}}
-                        {{- if $type.IsRepeated -}} ) {{- end -}},
+				{{- if $type.IsScalar -}} {{- $type.Name -}}
+				{{- else if $type.IsEnum -}} GraphQL_{{- $type.Name -}}Enum
+				{{- else -}} GraphQL_Input{{- $type.Name -}} {{- end -}}
+			{{- if $type.IsRepeated -}} ) {{- end -}},
 		},
 		{{- end }}
 	},
@@ -36,10 +36,18 @@ var GraphQL_{{$output.MessageName}} *graphql.Object = graphql.NewObject(graphql.
 		"{{$field.FieldName}}": &graphql.Field{
 			Name: "{{ $field.FieldName }}",
 			Type: {{if $type.IsRepeated -}} graphql.NewList( {{- end -}}
-                            {{- if $type.IsScalar -}} {{- $type.Name -}}
-                            {{- else if $type.IsEnum -}} GraphQL_{{- $type.Name -}}Enum
-                            {{- else -}} GraphQL_{{- $type.Name -}} {{- end -}}
-                            {{- if $type.IsRepeated -}} ) {{- end -}},
+				{{- if $type.IsScalar -}} {{- $type.Name -}}
+				{{- else if $type.IsEnum -}} GraphQL_{{- $type.Name -}}Enum
+				{{- else -}} GraphQL_{{- $type.Name -}} {{- end -}}
+				{{- if $type.IsRepeated -}} ) {{- end }},
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				if pdata, ok := p.Source.(*{{$output.MessageName}}); ok {
+					return pdata.{{GetFieldName $field.FieldName}}, nil
+				} else if data, ok := p.Source.({{$output.MessageName}}); ok {
+					return data.{{GetFieldName $field.FieldName}}, nil
+				}
+				return nil, nil
+			},
 		},
 		{{- end }}
 		{{- range $union := $output.MessageBody.Oneofs -}}
@@ -58,7 +66,7 @@ var GraphQL_{{$name}}Enum *graphql.Enum = graphql.NewEnum(graphql.EnumConfig{
 	Values: graphql.EnumValueConfigMap{
 		{{- range $enumField := $enum.EnumBody.EnumFields }}
 		"{{$enumField.Ident}}": &graphql.EnumValueConfig{
-			Value: "{{$enumField.Ident}}",
+			Value: {{$name}}_{{$enumField.Ident}},
 		},
 		{{- end }}
 	},
@@ -89,16 +97,16 @@ func Register{{$svc.ServiceName}}Queries(queries graphql.Fields, sc {{$svc.Servi
 		},
 		Type: GraphQL_{{$query.RPCResponse.MessageType}},
 		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-			inputArgs, ok := p.Args["input"].(map[string]interface{})
-			if !ok || inputArgs == nil {
-				return nil, errors.New("Missing required parameter `input`")
-			}
 			var req {{$query.RPCRequest.MessageType}}
-			mapErr := mapstructure.Decode(inputArgs, &req)
-			if mapErr != nil {
-				return nil, mapErr
+			rawJson, err := json.Marshal(p.Args["input"])
+			if err != nil {
+				return nil, err
 			}
-			return sc.{{title $name}}(p.Context, &req)
+			jsonpb.UnmarshalString(string(rawJson), &req)
+			if err != nil {
+				return nil, err
+			}
+			return sc.{{GetFieldName $name}}(p.Context, &req)
 		},
 	}
 	{{- end }}
@@ -117,16 +125,16 @@ func Register{{$svc.ServiceName}}Mutations(mutations graphql.Fields, sc {{$svc.S
 		},
 		Type: GraphQL_{{$mutation.RPCResponse.MessageType}},
 		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-			inputArgs, ok := p.Args["input"].(map[string]interface{})
-			if !ok || inputArgs == nil {
-				return nil, errors.New("Missing required parameter `input`")
-			}
 			var req {{$mutation.RPCRequest.MessageType}}
-			mapErr := mapstructure.Decode(inputArgs, &req)
-			if mapErr != nil {
-				return nil, mapErr
+			rawJson, err := json.Marshal(p.Args["input"])
+			if err != nil {
+				return nil, err
 			}
-			return sc.{{title $name}}(p.Context, &req)
+			jsonpb.UnmarshalString(string(rawJson), &req)
+			if err != nil {
+				return nil, err
+			}
+			return sc.{{GetFieldName $name}}(p.Context, &req)
 		},
 	}
 	{{- end }}
