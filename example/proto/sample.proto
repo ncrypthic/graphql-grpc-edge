@@ -1,6 +1,6 @@
 syntax="proto3";
 
-import "graphql-edge/proto/graphql.proto";
+import "graphql-grpc-edge/proto/graphql.proto";
 
 package sample;
 
