@@ -13,10 +13,21 @@ message Error {
     string error_message = 1;
 }
 
+message HelloSender {
+    enum SenderType {
+        PUBLIC = 0;
+        FRIEND = 1;
+    }
+    string name = 1;
+    string last_name = 2;
+    SenderType type = 3;
+}
+
 message Hello {
     string name = 1;
     HelloType type = 2;
     repeated string messages = 3;
+    HelloSender sender = 4;
 }
 
 message ServerError {

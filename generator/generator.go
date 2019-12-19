@@ -239,12 +239,12 @@ var GraphQL_{{$output.MessageName}} *graphql.Object = graphql.NewObject(graphql.
 
 {{ end }}
 {{- range $name,$enum := .Enums }}
-var GraphQL_{{$name}}Enum *graphql.Enum = graphql.NewEnum(graphql.EnumConfig{
-	Name: "{{$name}}Enum",
+var GraphQL_{{$enum.EnumName}}Enum *graphql.Enum = graphql.NewEnum(graphql.EnumConfig{
+	Name: "{{$enum.EnumName}}Enum",
 	Values: graphql.EnumValueConfigMap{
 		{{- range $enumField := $enum.EnumBody.EnumFields }}
 		"{{$enumField.Ident}}": &graphql.EnumValueConfig{
-			Value: {{$name}}_{{$enumField.Ident}},
+			Value: {{$name}}_value["{{$enumField.Ident}}"],
 		},
 		{{- end }}
 	},
@@ -328,7 +328,7 @@ func RegisterGraphQLTypes(types []graphql.Type) {
 	types = append(types, GraphQL_{{$output.MessageName}})
 	{{- end }}
 	{{- range $name,$enum := .Enums }}
-	types = append(types, GraphQL_{{$name}}Enum)
+	types = append(types, GraphQL_{{$enum.EnumName}}Enum)
 	{{- end }}
 	{{- range $name,$union := .Unions }}
 	types = append(types, GraphQL_{{$name}}Union)

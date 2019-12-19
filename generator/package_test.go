@@ -1,15 +1,26 @@
 package generator
 
 import (
-	"os"
+	"io/ioutil"
 	"testing"
+
+	"github.com/golang/protobuf/protoc-gen-go/descriptor"
+	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
 )
 
 func TestGenerate(t *testing.T) {
-	protoFile, _ := os.Open("../example/proto/sample.proto")
-	dst, _ := os.Create("../example/sample/sample.edge.go")
+	b, _ := ioutil.ReadFile("../example/sample/sample.proto")
+	fd := new(descriptor.FileDescriptorProto)
+	err := fd.XXX_Unmarshal(b)
+	if err != nil {
+		t.Fatalf("Err: %s", err)
+	}
 
-	err := Generate(protoFile, dst)
+	req := &plugin.CodeGeneratorRequest{
+		FileToGenerate: []string{},
+		ProtoFile:      []*descriptor.FileDescriptorProto{fd},
+	}
+	_, err = Generate(req)
 	if err != nil {
 		t.Fatalf("Err: %s", err)
 	}
