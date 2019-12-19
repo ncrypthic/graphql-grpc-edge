@@ -2,6 +2,8 @@ syntax="proto2";
 
 import "google/protobuf/descriptor.proto";
 
+option go_package="github.com/ncrypthic/graphql-grpc-edge/graphql";
+
 package graphql;
 
 message GraphQLOption{

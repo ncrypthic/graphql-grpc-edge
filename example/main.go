@@ -1,3 +1,4 @@
+//go:generate protoc --go_out=plugins=grpc:. --graphql_out=. -I=../../ -I . sample/sample.proto
 package main
 
 import (
@@ -8,12 +9,13 @@ import (
 	graphql "github.com/graphql-go/graphql"
 	"github.com/graphql-go/handler"
 	"github.com/ncrypthic/graphql-grpc-edge/example/sample"
+	"github.com/ncrypthic/graphql-grpc-edge/example/server"
 	grpc "google.golang.org/grpc"
 )
 
 func main() {
 	// GRPC Server
-	srv := sample.HelloServer{}
+	srv := server.HelloServer{}
 	lis, err := net.Listen("tcp", ":9999")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
