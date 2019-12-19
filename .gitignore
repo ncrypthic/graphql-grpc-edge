@@ -3,3 +3,4 @@ vendor/*
 *~
 *.temp
 *.orig
+example/*.pb.go
