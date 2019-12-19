@@ -15,8 +15,8 @@ import (
 func Generate(req *plugin.CodeGeneratorRequest) (res *plugin.CodeGeneratorResponse, err error) {
 	res = &plugin.CodeGeneratorResponse{}
 	for _, f := range req.GetFileToGenerate() {
-		fileName := generateFilename(f)
-		g := NewGenerator(DefaultNameGenerator)
+		baseFileName, fileName := generateFilename(f)
+		g := NewGenerator(DefaultNameGenerator, baseFileName)
 		src, err := os.Open(f)
 		if err != nil {
 			res = withError(res, err)
@@ -27,19 +27,22 @@ func Generate(req *plugin.CodeGeneratorRequest) (res *plugin.CodeGeneratorRespon
 			res = withError(res, err)
 			break
 		}
-		if err = g.FromProto(proto); err != nil {
+		if ok, err := g.FromProto(proto); err != nil {
 			res = withError(res, err)
 			break
+		} else if !ok {
+			continue
 		}
 
 		tmpl := template.New("graphql_grpc_template")
 		tmpl.Funcs(template.FuncMap{
-			"lcfirst":       funcs.LCFirst,
-			"ucfirst":       funcs.UCFirst,
-			"concat":        funcs.Concat,
-			"lookUpMessage": funcs.LookUpMessage,
-			"GetTypeInfo":   g.GetTypeInfo,
-			"GetFieldName":  g.GetFieldName,
+			"lcfirst":            funcs.LCFirst,
+			"ucfirst":            funcs.UCFirst,
+			"concat":             funcs.Concat,
+			"lookUpMessage":      funcs.LookUpMessage,
+			"GetTypeInfo":        g.GetTypeInfo,
+			"GetFieldName":       g.GetFieldName,
+			"NormalizedFileName": funcs.NormalizedFileName,
 		})
 
 		tmpl, err = tmpl.Parse(codeTemplate)
@@ -68,10 +71,13 @@ func Generate(req *plugin.CodeGeneratorRequest) (res *plugin.CodeGeneratorRespon
 	return res, err
 }
 
-func generateFilename(s string) string {
+func generateFilename(s string) (base string, generatedFileName string) {
 	ext := filepath.Ext(s)
-	base := s[0 : len(s)-len(ext)]
-	return base + ".graphql.pb.go"
+	fileName := s[0 : len(s)-len(ext)]
+	generatedFileName = fileName + ".graphql.pb.go"
+	base = filepath.Base(s)
+	base = base[0 : len(base)-len(ext)]
+	return
 }
 
 func withError(res *plugin.CodeGeneratorResponse, err error) *plugin.CodeGeneratorResponse {

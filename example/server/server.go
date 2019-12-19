@@ -25,3 +25,6 @@ func (h *HelloServer) SetGreeting(ctx context.Context, req *sample.Hello) (*samp
 		},
 	}, nil
 }
+func (h *HelloServer) HelloQuery(ctx context.Context, req *sample.Test) (*sample.Test, error) {
+	return req, nil
+}

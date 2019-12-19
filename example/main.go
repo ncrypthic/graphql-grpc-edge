@@ -28,6 +28,7 @@ func main() {
 	}
 	grpcServer := grpc.NewServer()
 	sample.RegisterHelloServiceServer(grpcServer, &srv)
+	sample.RegisterHelloTestServiceServer(grpcServer, &srv)
 	go grpcServer.Serve(lis)
 
 	// GraphQL Edge Server
@@ -38,7 +39,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to connect to grpc server: %v", err)
 	}
-	sample.RegisterGraphQLTypes(types)
+	sample.RegisterTestGraphQLTypes(types)
+	sample.RegisterHelloTestServiceQueries(queries, sample.NewHelloTestServiceClient(grpcClient))
+	sample.RegisterHelloTestServiceMutations(mutations, sample.NewHelloTestServiceClient(grpcClient))
+	sample.RegisterSampleGraphQLTypes(types)
 	sample.RegisterHelloServiceQueries(queries, sample.NewHelloServiceClient(grpcClient))
 	sample.RegisterHelloServiceMutations(mutations, sample.NewHelloServiceClient(grpcClient))
 	rootQuery := graphql.ObjectConfig{Name: "RootQuery", Fields: queries}

@@ -48,3 +48,11 @@ func LookUpMessage(name string, b *unordered.ProtoBody) *unordered.Message {
 func LookUpEnum(name string, b *unordered.ProtoBody) []*unordered.Enum {
 	return nil
 }
+
+func NormalizedFileName(s string) string {
+	replaceStr := []string{".", "/", "_"}
+	for _, c := range replaceStr {
+		s = strings.ReplaceAll(s, c, "")
+	}
+	return strings.Title(s)
+}

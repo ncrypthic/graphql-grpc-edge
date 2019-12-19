@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/ncrypthic/graphql-grpc-edge/generator/funcs"
@@ -40,7 +41,7 @@ type TypeInfo struct {
 
 //Generator is an interface of graphql code generator
 type Generator interface {
-	FromProto(*parser.Proto) error
+	FromProto(*parser.Proto) (bool, error)
 	GetTypeInfo(*unordered.Message, *parser.Field) *TypeInfo
 	GetFieldName(string) string
 }
@@ -48,6 +49,7 @@ type Generator interface {
 type generator struct {
 	TypeNameGenerator TypeNameGenerator
 	PackageName       string
+	BaseFileName      string
 	Enums             map[string]*unordered.Enum
 	Objects           map[string]*unordered.Message
 	Unions            map[string]*parser.Oneof
@@ -57,9 +59,10 @@ type generator struct {
 	Services          []*unordered.Service
 }
 
-func NewGenerator(typeNameGenerator TypeNameGenerator) Generator {
+func NewGenerator(typeNameGenerator TypeNameGenerator, baseFileName string) Generator {
 	return &generator{
 		TypeNameGenerator: typeNameGenerator,
+		BaseFileName:      baseFileName,
 		Enums:             make(map[string]*unordered.Enum),
 		Inputs:            make(map[string]*unordered.Message),
 		Objects:           make(map[string]*unordered.Message),
@@ -69,28 +72,39 @@ func NewGenerator(typeNameGenerator TypeNameGenerator) Generator {
 	}
 }
 
-func (g *generator) FromProto(p *parser.Proto) error {
+func (g *generator) FromProto(p *parser.Proto) (bool, error) {
 	proto, err := protoparser.UnorderedInterpret(p)
 	if err != nil {
-		return err
+		return false, err
 	}
 	g.PackageName = proto.ProtoBody.Packages[0].Name
-	g.Services = make([]*unordered.Service, len(proto.ProtoBody.Services))
-	for i, svc := range proto.ProtoBody.Services {
-		g.Services[i] = svc
+	g.Services = make([]*unordered.Service, 0)
+	for _, svc := range proto.ProtoBody.Services {
+		svcHasGraphQL := false
 		for _, rpc := range svc.ServiceBody.RPCs {
 			for _, opt := range rpc.Options {
 				if opt.OptionName != "(graphql.type)" {
 					continue
+				}
+				if !svcHasGraphQL {
+					svcHasGraphQL = true
 				}
 				val := opt.Constant[1 : len(opt.Constant)-1]
 				segments := strings.Split(val, ":")
 				op := segments[0]
 				opName := strings.ReplaceAll(segments[1], "\\\"", "\"")[1 : len(segments[1])-1]
 				if op == "query" {
-					g.Queries[opName] = rpc
+					if _, existing := g.Queries[opName]; !existing {
+						g.Queries[opName] = rpc
+					} else {
+						return true, fmt.Errorf("Duplicate query `%s`", opName)
+					}
 				} else if op == "mutation" {
-					g.Mutations[opName] = rpc
+					if _, existing := g.Mutations[opName]; !existing {
+						g.Mutations[opName] = rpc
+					} else {
+						return true, fmt.Errorf("Duplicate mutation `%s`", opName)
+					}
 				}
 				if _, ok := g.Inputs[rpc.RPCRequest.MessageType]; !ok {
 					g.Inputs[rpc.RPCRequest.MessageType] = funcs.LookUpMessage(rpc.RPCRequest.MessageType, proto.ProtoBody)
@@ -100,6 +114,12 @@ func (g *generator) FromProto(p *parser.Proto) error {
 				}
 			}
 		}
+		if svcHasGraphQL {
+			g.Services = append(g.Services, svc)
+		}
+	}
+	if len(g.Queries) == 0 && len(g.Mutations) == 0 {
+		return false, nil
 	}
 	for _, msg := range proto.ProtoBody.Messages {
 		if _, ok := g.Inputs[msg.MessageName]; !ok {
@@ -121,7 +141,7 @@ func (g *generator) FromProto(p *parser.Proto) error {
 		g.Enums[enum.EnumName] = enum
 	}
 
-	return nil
+	return true, nil
 }
 
 func (g *generator) GetTypeInfo(msg *unordered.Message, field *parser.Field) *TypeInfo {
@@ -280,11 +300,11 @@ func Register{{$svc.ServiceName}}Queries(queries graphql.Fields, sc {{$svc.Servi
 			if err != nil {
 				return nil, err
 			}
-			jsonpb.UnmarshalString(string(rawJson), &req)
+			err = jsonpb.UnmarshalString(string(rawJson), &req)
 			if err != nil {
 				return nil, err
 			}
-			return sc.{{GetFieldName $name}}(p.Context, &req)
+			return sc.{{$query.RPCName}}(p.Context, &req)
 		},
 	}
 	{{- end }}
@@ -308,11 +328,11 @@ func Register{{$svc.ServiceName}}Mutations(mutations graphql.Fields, sc {{$svc.S
 			if err != nil {
 				return nil, err
 			}
-			jsonpb.UnmarshalString(string(rawJson), &req)
+			err = jsonpb.UnmarshalString(string(rawJson), &req)
 			if err != nil {
 				return nil, err
 			}
-			return sc.{{GetFieldName $name}}(p.Context, &req)
+			return sc.{{$mutation.RPCName}}(p.Context, &req)
 		},
 	}
 	{{- end }}
@@ -320,7 +340,7 @@ func Register{{$svc.ServiceName}}Mutations(mutations graphql.Fields, sc {{$svc.S
 }
 {{ end }}
 
-func RegisterGraphQLTypes(types []graphql.Type) {
+func Register{{NormalizedFileName .BaseFileName}}GraphQLTypes(types []graphql.Type) {
 	{{- range $input := .Inputs }}
 	types = append(types, GraphQL_Input{{$input.MessageName}})
 	{{- end }}

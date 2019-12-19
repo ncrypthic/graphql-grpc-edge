@@ -1,0 +1,21 @@
+syntax="proto3";
+
+import "graphql-grpc-edge/graphql/graphql.proto";
+
+package sample;
+
+message Test {
+    string name = 1;
+}
+
+service TestService {
+    rpc Hello(Test) returns(Test);
+}
+
+service HelloTestService {
+    rpc HelloQuery(Test) returns(Test) {
+        option (graphql.type) = {
+            query: "hello"
+        };
+    };
+}
