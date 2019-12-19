@@ -2,6 +2,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -13,10 +14,15 @@ import (
 	grpc "google.golang.org/grpc"
 )
 
+const (
+	GRPCPort string = ":9090"
+	HTTPPort        = ":8080"
+)
+
 func main() {
 	// GRPC Server
 	srv := server.HelloServer{}
-	lis, err := net.Listen("tcp", ":9999")
+	lis, err := net.Listen("tcp", GRPCPort)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -28,7 +34,7 @@ func main() {
 	queries := graphql.Fields{}
 	mutations := graphql.Fields{}
 	types := make([]graphql.Type, 0)
-	grpcClient, err := grpc.Dial(":9999", grpc.WithInsecure())
+	grpcClient, err := grpc.Dial(GRPCPort, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("failed to connect to grpc server: %v", err)
 	}
@@ -53,5 +59,6 @@ func main() {
 	})
 
 	http.Handle("/graphql", h)
-	http.ListenAndServe(":8080", nil)
+	fmt.Printf("GraphQL gRPC edge server running on %s\n", HTTPPort)
+	http.ListenAndServe(HTTPPort, nil)
 }
