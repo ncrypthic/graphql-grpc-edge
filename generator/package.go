@@ -47,7 +47,7 @@ func Generate(req *plugin.CodeGeneratorRequest) (res *plugin.CodeGeneratorRespon
 			res = withError(res, err)
 			break
 		}
-		bb := bytes.NewBuffer(make([]byte, 64*1024))
+		bb := bytes.NewBuffer(nil)
 		err = tmpl.Execute(bb, g)
 		if err != nil {
 			res = withError(res, err)
