@@ -8,7 +8,6 @@ import (
 	"text/template"
 
 	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
-	"github.com/ncrypthic/graphql-grpc-edge/generator/funcs"
 	protoparser "github.com/yoheimuta/go-protoparser"
 )
 
@@ -36,16 +35,12 @@ func Generate(req *plugin.CodeGeneratorRequest) (res *plugin.CodeGeneratorRespon
 
 		tmpl := template.New("graphql_grpc_template")
 		tmpl.Funcs(template.FuncMap{
-			"lcfirst":            funcs.LCFirst,
-			"ucfirst":            funcs.UCFirst,
-			"concat":             funcs.Concat,
-			"lookUpMessage":      funcs.LookUpMessage,
-			"GetFieldType":       g.GetFieldType,
-			"GetFieldName":       g.GetFieldName,
-			"NormalizedFileName": funcs.NormalizedFileName,
-			"GetBaseType":        g.GetBaseType,
-			"GetInputType":       g.GetInputType,
-			"GetOutputType":      g.GetOutputType,
+			"GetFieldType":         g.GetFieldType,
+			"GetProtobufFieldName": g.GetProtobufFieldName,
+			"GetBaseType":          g.GetBaseType,
+			"GetInputType":         g.GetInputType,
+			"GetOutputType":        g.GetOutputType,
+			"NormalizedFileName":   NormalizedFileName,
 		})
 
 		tmpl, err = tmpl.Parse(codeTemplate)

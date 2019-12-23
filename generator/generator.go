@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ncrypthic/graphql-grpc-edge/generator/funcs"
 	protoparser "github.com/yoheimuta/go-protoparser"
 	"github.com/yoheimuta/go-protoparser/interpret/unordered"
 	"github.com/yoheimuta/go-protoparser/parser"
@@ -119,7 +118,7 @@ func (t *TypeInfo) formatName() string {
 type Generator interface {
 	FromProto(*parser.Proto) (bool, error)
 	GetFieldType(*unordered.Message, *parser.Field, string) *TypeInfo
-	GetFieldName(string) string
+	GetProtobufFieldName(string) string
 	GetBaseType(string) string
 	GetInputType(string) string
 	GetOutputType(string) string
@@ -194,10 +193,10 @@ func (g *generator) FromProto(p *parser.Proto) (bool, error) {
 					}
 				}
 				if _, ok := g.Inputs[rpc.RPCRequest.MessageType]; !ok {
-					g.Inputs[rpc.RPCRequest.MessageType] = funcs.LookUpMessage(rpc.RPCRequest.MessageType, proto.ProtoBody)
+					g.Inputs[rpc.RPCRequest.MessageType] = FindMessage(rpc.RPCRequest.MessageType, proto.ProtoBody)
 				}
 				if _, ok := g.Objects[rpc.RPCResponse.MessageType]; !ok {
-					g.Objects[rpc.RPCResponse.MessageType] = funcs.LookUpMessage(rpc.RPCResponse.MessageType, proto.ProtoBody)
+					g.Objects[rpc.RPCResponse.MessageType] = FindMessage(rpc.RPCResponse.MessageType, proto.ProtoBody)
 				}
 			}
 		}
@@ -329,7 +328,7 @@ func (g *generator) GetFieldType(msg *unordered.Message, field *parser.Field, su
 	}
 }
 
-func (g *generator) GetFieldName(s string) string {
+func (g *generator) GetProtobufFieldName(s string) string {
 	segments := strings.Split(s, "_")
 	res := ""
 	for _, segment := range segments {
@@ -390,9 +389,9 @@ var GraphQL_{{$output.MessageName}} *graphql.Object = graphql.NewObject(graphql.
 			Type: {{ $type.GetName }},
 			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 				if pdata, ok := p.Source.(*{{$output.MessageName}}); ok {
-					return pdata.{{GetFieldName $field.FieldName}}, nil
+					return pdata.{{GetProtobufFieldName $field.FieldName}}, nil
 				} else if data, ok := p.Source.({{$output.MessageName}}); ok {
-					return data.{{GetFieldName $field.FieldName}}, nil
+					return data.{{GetProtobufFieldName $field.FieldName}}, nil
 				}
 				return nil, nil
 			},
@@ -510,3 +509,20 @@ func Register{{NormalizedFileName .BaseFileName}}GraphQLTypes() {
 	{{- end }}
 }`
 )
+
+func FindMessage(name string, b *unordered.ProtoBody) *unordered.Message {
+	for _, m := range b.Messages {
+		if m.MessageName == name {
+			return m
+		}
+	}
+	return nil
+}
+
+func NormalizedFileName(s string) string {
+	replaceStr := []string{".", "/", "_"}
+	for _, c := range replaceStr {
+		s = strings.ReplaceAll(s, c, "")
+	}
+	return strings.Title(s)
+}
