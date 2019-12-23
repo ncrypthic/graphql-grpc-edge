@@ -40,9 +40,12 @@ func Generate(req *plugin.CodeGeneratorRequest) (res *plugin.CodeGeneratorRespon
 			"ucfirst":            funcs.UCFirst,
 			"concat":             funcs.Concat,
 			"lookUpMessage":      funcs.LookUpMessage,
-			"GetTypeInfo":        g.GetTypeInfo,
+			"GetFieldType":       g.GetFieldType,
 			"GetFieldName":       g.GetFieldName,
 			"NormalizedFileName": funcs.NormalizedFileName,
+			"GetBaseType":        g.GetBaseType,
+			"GetInputType":       g.GetInputType,
+			"GetOutputType":      g.GetOutputType,
 		})
 
 		tmpl, err = tmpl.Parse(codeTemplate)

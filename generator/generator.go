@@ -11,16 +11,59 @@ import (
 )
 
 const (
-	ContextPackage    string = "package"
-	ContextMessage           = "message"
-	ContextService           = "service"
-	ContextRPC               = "rpc"
-	ContextRPCInput          = "rpcInput"
-	ContenxtRPCOutput        = "rpcOutput"
-	ContextOption            = "option"
-	ContextEnum              = "enum"
-
 	OptionGraphQL string = "(graphql.type)"
+)
+
+var (
+	wellKnownTypes_imports map[string]string = map[string]string{
+		"google/protobuf/empty.proto":             `pbEmpty "github.com/golang/protobuf/ptypes/empty"`,
+		"google/protobuf/timestamp.proto":         `pbTimestamp "github.com/golang/protobuf/ptypes/timestamp"`,
+		"google/protobuf/duration.proto":          `pbDuration "github.com/golang/protobuf/ptypes/duration"`,
+		"google/protobuf/wrappers.proto":          `pbWrappers "github.com/golang/protobuf/ptypes/wrappers"`,
+		"graphql-grpc-edge/graphql/graphql.proto": `pbGraphql "github.com/ncrypthic/graphql-grpc-edge/graphql"`,
+	}
+
+	wellKnownTypes_input_map map[string]string = map[string]string{
+		"google.protobuf.Empty":       "pbGraphql.GraphQL_Empty",
+		"google.protobuf.Timestamp":   "pbGraphql.GraphQL_Timestamp",
+		"google.protobuf.Duration":    "pbGraphql.GraphQL_Duration",
+		"google.protobuf.StringValue": "pbGraphql.GraphQL_StringValueInput",
+		"google.protobuf.FloatValue":  "pbGraphql.GraphQL_FloatValueInput",
+		"google.protobuf.DoubleValue": "pbGraphql.GraphQL_DoubleValueInput",
+		"google.protobuf.BoolValue":   "pbGraphql.GraphQL_BoolValueInput",
+		"google.protobuf.Int32Value":  "pbGraphql.GraphQL_Int32ValueInput",
+		"google.protobuf.UInt32Value": "pbGraphql.GraphQL_UInt32ValueInput",
+		"google.protobuf.Int64Value":  "pbGraphql.GraphQL_Int64ValueInput",
+		"google.protobuf.UInt64Value": "pbGraphql.GraphQL_UInt64ValueInput",
+	}
+
+	wellKnownTypes_map map[string]string = map[string]string{
+		"google.protobuf.Empty":       "pbGraphql.GraphQL_Empty",
+		"google.protobuf.Timestamp":   "pbGraphql.GraphQL_Timestamp",
+		"google.protobuf.Duration":    "pbGraphql.GraphQL_Duration",
+		"google.protobuf.StringValue": "pbGraphql.GraphQL_StringValue",
+		"google.protobuf.FloatValue":  "pbGraphql.GraphQL_FloatValue",
+		"google.protobuf.DoubleValue": "pbGraphql.GraphQL_DoubleValue",
+		"google.protobuf.BoolValue":   "pbGraphql.GraphQL_BoolValue",
+		"google.protobuf.Int32Value":  "pbGraphql.GraphQL_Int32Value",
+		"google.protobuf.UInt32Value": "pbGraphql.GraphQL_UInt32Value",
+		"google.protobuf.Int64Value":  "pbGraphql.GraphQL_Int64Value",
+		"google.protobuf.UInt64Value": "pbGraphql.GraphQL_UInt64Value",
+	}
+
+	wellKnownTypes_base map[string]string = map[string]string{
+		"google.protobuf.Empty":       "pbEmpty.Empty",
+		"google.protobuf.Timestamp":   "pbTimestamp.Timestamp",
+		"google.protobuf.Duration":    "pbDuration.Duration",
+		"google.protobuf.StringValue": "pbWrappers.StringValue",
+		"google.protobuf.FloatValue":  "pbWrappers.FloatValue",
+		"google.protobuf.DoubleValue": "pbWrappers.DoubleValue",
+		"google.protobuf.BoolValue":   "pbWrappers.BoolValue",
+		"google.protobuf.Int32Value":  "pbWrappers.Int32Value",
+		"google.protobuf.UInt32Value": "pbWrappers.UInt32Value",
+		"google.protobuf.Int64Value":  "pbWrappers.Int64Value",
+		"google.protobuf.UInt64Value": "pbWrappers.UInt64Value",
+	}
 )
 
 //TypeNameGenerator is function type to generate GraphQL type
@@ -34,16 +77,52 @@ func DefaultNameGenerator(packageName, typeName string) string {
 
 type TypeInfo struct {
 	Name       string
+	Prefix     string
+	Suffix     string
 	IsScalar   bool
 	IsRepeated bool
 	IsEnum     bool
+	IsNonNull  bool
+}
+
+func (t *TypeInfo) GetName() string {
+	return t.formatRepeated()
+}
+
+func (t *TypeInfo) formatRepeated() string {
+	if t.IsRepeated {
+		return fmt.Sprintf(`graphql.NewList(%s)`, t.formatNonNull())
+	} else {
+		return t.formatNonNull()
+	}
+}
+
+func (t *TypeInfo) formatNonNull() string {
+	if t.IsNonNull {
+		return fmt.Sprintf(`graphql.NewNonNull(%s)`, t.formatName())
+	} else {
+		return t.formatName()
+	}
+}
+
+func (t *TypeInfo) formatName() string {
+	if t.IsScalar {
+		return t.Prefix + "." + t.Name
+	}
+	if t.Prefix != "" {
+		return "GraphQL_" + t.Prefix + "." + t.Name + t.Suffix
+	}
+	return "GraphQL_" + t.Name + t.Suffix
 }
 
 //Generator is an interface of graphql code generator
 type Generator interface {
 	FromProto(*parser.Proto) (bool, error)
-	GetTypeInfo(*unordered.Message, *parser.Field) *TypeInfo
+	GetFieldType(*unordered.Message, *parser.Field, string) *TypeInfo
 	GetFieldName(string) string
+	GetBaseType(string) string
+	GetInputType(string) string
+	GetOutputType(string) string
 }
 
 type generator struct {
@@ -57,6 +136,7 @@ type generator struct {
 	Queries           map[string]*parser.RPC
 	Mutations         map[string]*parser.RPC
 	Services          []*unordered.Service
+	Imports           []string
 }
 
 func NewGenerator(typeNameGenerator TypeNameGenerator, baseFileName string) Generator {
@@ -69,6 +149,7 @@ func NewGenerator(typeNameGenerator TypeNameGenerator, baseFileName string) Gene
 		Unions:            make(map[string]*parser.Oneof),
 		Queries:           make(map[string]*parser.RPC),
 		Mutations:         make(map[string]*parser.RPC),
+		Imports:           make([]string, 0),
 	}
 }
 
@@ -77,13 +158,19 @@ func (g *generator) FromProto(p *parser.Proto) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	for _, imp := range proto.ProtoBody.Imports {
+		importLine, ok := wellKnownTypes_imports[strings.Trim(imp.Location, `"`)]
+		if ok {
+			g.Imports = append(g.Imports, importLine)
+		}
+	}
 	g.PackageName = proto.ProtoBody.Packages[0].Name
 	g.Services = make([]*unordered.Service, 0)
 	for _, svc := range proto.ProtoBody.Services {
 		svcHasGraphQL := false
 		for _, rpc := range svc.ServiceBody.RPCs {
 			for _, opt := range rpc.Options {
-				if opt.OptionName != "(graphql.type)" {
+				if opt.OptionName != OptionGraphQL {
 					continue
 				}
 				if !svcHasGraphQL {
@@ -144,12 +231,36 @@ func (g *generator) FromProto(p *parser.Proto) (bool, error) {
 	return true, nil
 }
 
-func (g *generator) GetTypeInfo(msg *unordered.Message, field *parser.Field) *TypeInfo {
+func (g *generator) GetInputType(typeName string) string {
+	wellKnownType, ok := wellKnownTypes_input_map[typeName]
+	if ok {
+		return wellKnownType
+	}
+	_, ok = g.Inputs[typeName]
+	if ok {
+		return "GraphQL_" + typeName + "Input"
+	}
+	return typeName
+}
+
+func (g *generator) GetOutputType(typeName string) string {
+	wellKnownType, ok := wellKnownTypes_map[typeName]
+	if ok {
+		return wellKnownType
+	}
+	_, ok = g.Objects[typeName]
+	if ok {
+		return "GraphQL_" + typeName
+	}
+	return typeName
+}
+
+func (g *generator) GetFieldType(msg *unordered.Message, field *parser.Field, suffix string) *TypeInfo {
 	switch field.Type {
 	case "float":
 		fallthrough
 	case "double":
-		return &TypeInfo{Name: "graphql.Float", IsScalar: true, IsRepeated: field.IsRepeated}
+		return &TypeInfo{Name: "Float", Prefix: "graphql", IsScalar: true, IsRepeated: field.IsRepeated, IsNonNull: true}
 	case "int32":
 		fallthrough
 	case "int64":
@@ -169,18 +280,51 @@ func (g *generator) GetTypeInfo(msg *unordered.Message, field *parser.Field) *Ty
 	case "sfixed32":
 		fallthrough
 	case "sfixed64":
-		return &TypeInfo{Name: "graphql.Int", IsScalar: true, IsRepeated: field.IsRepeated}
+		return &TypeInfo{Name: "Int", Prefix: "graphql", IsScalar: true, IsRepeated: field.IsRepeated, IsNonNull: true}
 	case "bool":
-		return &TypeInfo{Name: "graphql.Boolean", IsScalar: true, IsRepeated: field.IsRepeated}
+		return &TypeInfo{Name: "Boolean", Prefix: "graphql", IsScalar: true, IsRepeated: field.IsRepeated, IsNonNull: true}
 	case "string":
-		return &TypeInfo{Name: "graphql.String", IsScalar: true, IsRepeated: field.IsRepeated}
+		return &TypeInfo{Name: "String", Prefix: "graphql", IsScalar: true, IsRepeated: field.IsRepeated, IsNonNull: true}
+	case "google.protobuf.Empty":
+		return &TypeInfo{Name: "Empty", Prefix: "pbEmpty", IsRepeated: field.IsRepeated}
+	case "google.protobuf.Timestamp":
+		return &TypeInfo{Name: "Timestamp", Prefix: "pbTimestamp", IsRepeated: field.IsRepeated}
+	case "google.protobuf.Duration":
+		return &TypeInfo{Name: "Duration", Prefix: "pbDuration", IsRepeated: field.IsRepeated}
+	case "google.protobuf.DoubleValue":
+		return &TypeInfo{Name: "DoubleValue", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
+	case "google.protobuf.FloatValue":
+		return &TypeInfo{Name: "FloatValue", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
+	case "google.protobuf.Int64Value":
+		return &TypeInfo{Name: "Int64Value", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
+	case "google.protobuf.UInt64Value":
+		return &TypeInfo{Name: "UInt64Value", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
+	case "google.protobuf.Int32Value":
+		return &TypeInfo{Name: "Int32Value", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
+	case "google.protobuf.UInt32Value":
+		return &TypeInfo{Name: "UInt32Value", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
+	case "google.protobuf.BoolValue":
+		return &TypeInfo{Name: "BoolValue", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
+	case "google.protobuf.Any":
+		fallthrough
+	case "google.protobuf.BytesValue":
+		fallthrough
+	case "google.protobuf.StringValue":
+		return &TypeInfo{Name: "StringValue", Prefix: "pbGraphql", IsRepeated: field.IsRepeated, IsNonNull: false}
 	default:
-		info := &TypeInfo{Name: field.Type, IsScalar: false, IsRepeated: field.IsRepeated}
-		_, isEnum := g.Enums[msg.MessageName+"_"+field.Type]
-		if !isEnum {
-			_, isEnum = g.Enums[field.Type]
+		info := &TypeInfo{Name: field.Type, IsScalar: false, IsRepeated: field.IsRepeated, Suffix: suffix}
+		_, isMessageEnum := g.Enums[msg.MessageName+"_"+field.Type]
+		if isMessageEnum {
+			info.Suffix = "Enum"
+			info.IsEnum = true
+			return info
 		}
-		info.IsEnum = isEnum
+		_, isEnum := g.Enums[field.Type]
+		if isEnum {
+			info.Suffix = "Enum"
+			info.IsEnum = true
+			return info
+		}
 		return info
 	}
 }
@@ -194,35 +338,45 @@ func (g *generator) GetFieldName(s string) string {
 	return res
 }
 
+func (g *generator) GetBaseType(t string) string {
+	knownType, ok := wellKnownTypes_base[t]
+	if ok {
+		return knownType
+	}
+	return t
+}
+
 const (
-	codeTemplate string = `// DO NOT EDIT! This file is autogenerated by graphql-grpc-edge generator
+	codeTemplate string = `// DO NOT EDIT! This file is autogenerated by 'github.com/ncrypthic/graphql-grpc-edge/protoc-gen-graphql/generator'
 package {{.PackageName}}
 
 import (
 	"encoding/json"
 
-	"github.com/golang/protobuf/jsonpb"
 	graphql "github.com/graphql-go/graphql"
+	{{- range $import := .Imports }}
+	{{ $import }}
+	{{- end }}
 )
+
 {{ range $input := .Inputs }}
-var GraphQL_Input{{$input.MessageName}} *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
-	Name: "Input{{$input.MessageName}}",
+{{- if $input -}}
+var GraphQL_{{$input.MessageName}}Input *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
+	Name: "{{$input.MessageName}}Input",
 	Fields: graphql.InputObjectConfigFieldMap{
 		{{- range $field := $input.MessageBody.Fields -}}
-		{{ $type := GetTypeInfo $input $field }}
+		{{ $type := GetFieldType $input $field "Input"}}
 		"{{$field.FieldName}}": &graphql.InputObjectFieldConfig{
-			Type: {{ if $type.IsRepeated -}} graphql.NewList( {{- end -}}
-				{{- if $type.IsScalar -}} {{- $type.Name -}}
-				{{- else if $type.IsEnum -}} GraphQL_{{- $type.Name -}}Enum
-				{{- else -}} GraphQL_Input{{- $type.Name -}} {{- end -}}
-			{{- if $type.IsRepeated -}} ) {{- end -}},
+			Type: {{ $type.GetName }},
 		},
 		{{- end }}
 	},
 })
+{{- end }}
 
 {{ end }}
 {{- range $output := .Objects }}
+{{- if $output -}}
 var GraphQL_{{$output.MessageName}} *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
 	Name: "{{$output.MessageName}}",
 	IsTypeOf: func(p graphql.IsTypeOfParams) bool {
@@ -230,14 +384,10 @@ var GraphQL_{{$output.MessageName}} *graphql.Object = graphql.NewObject(graphql.
 	},
 	Fields: graphql.Fields{
 		{{- range $field := $output.MessageBody.Fields -}}
-		{{ $type := GetTypeInfo $output $field }}
+		{{ $type := GetFieldType $output $field "" }}
 		"{{$field.FieldName}}": &graphql.Field{
 			Name: "{{ $field.FieldName }}",
-			Type: {{if $type.IsRepeated -}} graphql.NewList( {{- end -}}
-				{{- if $type.IsScalar -}} {{- $type.Name -}}
-				{{- else if $type.IsEnum -}} GraphQL_{{- $type.Name -}}Enum
-				{{- else -}} GraphQL_{{- $type.Name -}} {{- end -}}
-				{{- if $type.IsRepeated -}} ) {{- end }},
+			Type: {{ $type.GetName }},
 			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
 				if pdata, ok := p.Source.(*{{$output.MessageName}}); ok {
 					return pdata.{{GetFieldName $field.FieldName}}, nil
@@ -256,6 +406,7 @@ var GraphQL_{{$output.MessageName}} *graphql.Object = graphql.NewObject(graphql.
 		{{- end }}
 	},
 })
+{{- end }}
 
 {{ end }}
 {{- range $name,$enum := .Enums }}
@@ -284,74 +435,78 @@ var GraphQL_{{$name}}Union *graphql.Union = graphql.NewUnion(graphql.UnionConfig
 {{- $queries := .Queries -}}
 {{- $mutations := .Mutations -}}
 {{ range $svc := .Services }}
-func Register{{$svc.ServiceName}}Queries(queries graphql.Fields, sc {{$svc.ServiceName}}Client) error {
+func Register{{$svc.ServiceName}}Queries(sc {{$svc.ServiceName}}Client) error {
 	{{- range $name,$query := $queries }}
-	queries["{{$name}}"] = &graphql.Field{
+	pbGraphql.RegisterQuery("{{$name}}", &graphql.Field{
 		Name: "{{$name}}",
 		Args: graphql.FieldConfigArgument{
 			"input": &graphql.ArgumentConfig{
-				Type: GraphQL_Input{{$query.RPCRequest.MessageType}},
+				Type: {{GetInputType $query.RPCRequest.MessageType}},
 			},
 		},
-		Type: GraphQL_{{$query.RPCResponse.MessageType}},
+		Type: {{GetOutputType $query.RPCResponse.MessageType}},
 		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-			var req {{$query.RPCRequest.MessageType}}
+			var req {{ GetBaseType $query.RPCRequest.MessageType }}
 			rawJson, err := json.Marshal(p.Args["input"])
 			if err != nil {
 				return nil, err
 			}
-			err = jsonpb.UnmarshalString(string(rawJson), &req)
+			err = json.Unmarshal(rawJson, &req)
 			if err != nil {
 				return nil, err
 			}
 			return sc.{{$query.RPCName}}(p.Context, &req)
 		},
-	}
+	})
 	{{- end }}
 
 	return nil
 }
 
-func Register{{$svc.ServiceName}}Mutations(mutations graphql.Fields, sc {{$svc.ServiceName}}Client) error {
+func Register{{$svc.ServiceName}}Mutations(sc {{$svc.ServiceName}}Client) error {
 	{{- range $name,$mutation := $mutations }}
-	mutations["{{$name}}"] = &graphql.Field{
+	pbGraphql.RegisterMutation("{{$name}}", &graphql.Field{
 		Name: "{{$name}}",
 		Args: graphql.FieldConfigArgument{
 			"input": &graphql.ArgumentConfig{
-				Type: GraphQL_Input{{$mutation.RPCRequest.MessageType}},
+				Type: {{GetInputType $mutation.RPCRequest.MessageType}},
 			},
 		},
-		Type: GraphQL_{{$mutation.RPCResponse.MessageType}},
+		Type: {{GetOutputType $mutation.RPCResponse.MessageType}},
 		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-			var req {{$mutation.RPCRequest.MessageType}}
+			var req {{ GetBaseType $mutation.RPCRequest.MessageType }}
 			rawJson, err := json.Marshal(p.Args["input"])
 			if err != nil {
 				return nil, err
 			}
-			err = jsonpb.UnmarshalString(string(rawJson), &req)
+			err = json.Unmarshal(rawJson, &req)
 			if err != nil {
 				return nil, err
 			}
 			return sc.{{$mutation.RPCName}}(p.Context, &req)
 		},
-	}
+	})
 	{{- end }}
 	return nil
 }
 {{ end }}
 
-func Register{{NormalizedFileName .BaseFileName}}GraphQLTypes(types []graphql.Type) {
+func Register{{NormalizedFileName .BaseFileName}}GraphQLTypes() {
 	{{- range $input := .Inputs }}
-	types = append(types, GraphQL_Input{{$input.MessageName}})
+	{{- if $input }}
+	pbGraphql.RegisterType(GraphQL_{{$input.MessageName}}Input)
+	{{- end -}}
 	{{- end }}
 	{{- range $output := .Objects }}
-	types = append(types, GraphQL_{{$output.MessageName}})
+	{{- if $output }}
+	pbGraphql.RegisterType(GraphQL_{{$output.MessageName}})
+	{{- end -}}
 	{{- end }}
 	{{- range $name,$enum := .Enums }}
-	types = append(types, GraphQL_{{$enum.EnumName}}Enum)
+	pbGraphql.RegisterType(GraphQL_{{$enum.EnumName}}Enum)
 	{{- end }}
 	{{- range $name,$union := .Unions }}
-	types = append(types, GraphQL_{{$name}}Union)
+	pbGraphql.RegisterType(GraphQL_{{$name}}Union)
 	{{- end }}
 }`
 )

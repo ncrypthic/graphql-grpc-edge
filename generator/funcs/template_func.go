@@ -1,6 +1,7 @@
 package funcs
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/yoheimuta/go-protoparser/interpret/unordered"
@@ -55,4 +56,12 @@ func NormalizedFileName(s string) string {
 		s = strings.ReplaceAll(s, c, "")
 	}
 	return strings.Title(s)
+}
+
+func GenerateImportAlias(s string) (string, string) {
+	dir := filepath.Dir(s)
+	filename := filepath.Base(s)
+	ext := filepath.Ext(filename)
+	suffix := strings.Title(filename[0 : len(filename)-len(ext)])
+	return strings.ReplaceAll(dir, "/", "."), "pb" + suffix
 }

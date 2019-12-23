@@ -1,4 +1,4 @@
-//go:generate protoc --go_out=plugins=grpc:. --graphql_out=. -I=../../ -I . sample/sample.proto
+//go:generate protoc --go_out=plugins=grpc:. --graphql_out=. -I=../../ -I . sample/sample.proto sample/test.proto
 package main
 
 import (
@@ -7,10 +7,10 @@ import (
 	"net"
 	"net/http"
 
-	graphql "github.com/graphql-go/graphql"
 	"github.com/graphql-go/handler"
 	"github.com/ncrypthic/graphql-grpc-edge/example/sample"
 	"github.com/ncrypthic/graphql-grpc-edge/example/server"
+	edge "github.com/ncrypthic/graphql-grpc-edge/graphql"
 	grpc "google.golang.org/grpc"
 )
 
@@ -32,32 +32,24 @@ func main() {
 	go grpcServer.Serve(lis)
 
 	// GraphQL Edge Server
-	queries := graphql.Fields{}
-	mutations := graphql.Fields{}
-	types := make([]graphql.Type, 0)
 	grpcClient, err := grpc.Dial(GRPCPort, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("failed to connect to grpc server: %v", err)
 	}
-	sample.RegisterTestGraphQLTypes(types)
-	sample.RegisterHelloTestServiceQueries(queries, sample.NewHelloTestServiceClient(grpcClient))
-	sample.RegisterHelloTestServiceMutations(mutations, sample.NewHelloTestServiceClient(grpcClient))
-	sample.RegisterSampleGraphQLTypes(types)
-	sample.RegisterHelloServiceQueries(queries, sample.NewHelloServiceClient(grpcClient))
-	sample.RegisterHelloServiceMutations(mutations, sample.NewHelloServiceClient(grpcClient))
-	rootQuery := graphql.ObjectConfig{Name: "RootQuery", Fields: queries}
-	rootMutation := graphql.ObjectConfig{Name: "RootMutation", Fields: mutations}
-	schemaConfig := graphql.SchemaConfig{
-		Query:    graphql.NewObject(rootQuery),
-		Mutation: graphql.NewObject(rootMutation),
-		Types:    types,
-	}
-	schema, err := graphql.NewSchema(schemaConfig)
+	testClient := sample.NewHelloTestServiceClient(grpcClient)
+	helloClient := sample.NewHelloServiceClient(grpcClient)
+	sample.RegisterTestGraphQLTypes()
+	sample.RegisterHelloTestServiceQueries(testClient)
+	sample.RegisterHelloTestServiceMutations(testClient)
+	sample.RegisterSampleGraphQLTypes()
+	sample.RegisterHelloServiceQueries(helloClient)
+	sample.RegisterHelloServiceMutations(helloClient)
+	schema, err := edge.GetSchema()
 	if err != nil {
 		log.Fatalf("failed to create new schema, error: %v", err)
 	}
 	h := handler.New(&handler.Config{
-		Schema:   &schema,
+		Schema:   schema,
 		Pretty:   true,
 		GraphiQL: true,
 	})

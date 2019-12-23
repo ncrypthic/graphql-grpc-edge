@@ -1,6 +1,10 @@
 syntax="proto3";
 
 import "graphql-grpc-edge/graphql/graphql.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
 
 package sample;
 
@@ -56,6 +60,12 @@ message HelloRequest {
     string name = 1;
 }
 
+message Money {
+    string currency = 1;
+    int64 amount = 2;
+    int32 decimal = 3;
+}
+
 service HelloService {
     rpc Greeting(HelloRequest) returns (HelloResponse) {
         option (graphql.type) = {
@@ -66,6 +76,42 @@ service HelloService {
     rpc SetGreeting(Hello) returns (HelloResponse) {
         option (graphql.type) = {
             mutation: "setGreeting"
+        };
+    }
+
+    rpc MetGreeting(google.protobuf.Empty) returns (google.protobuf.Empty) {
+        option (graphql.type) = {
+            mutation: "metGreeting"
+        };
+    }
+
+    rpc SetDuration(google.protobuf.Duration) returns (google.protobuf.Duration) {
+        option (graphql.type) = {
+            mutation: "setDuration"
+        };
+    }
+
+    rpc SetTimestamp(google.protobuf.Timestamp) returns (google.protobuf.Timestamp) {
+        option (graphql.type) = {
+            mutation: "setTimestamp"
+        };
+    }
+
+    rpc SetBoolValue(google.protobuf.BoolValue) returns (google.protobuf.BoolValue) {
+        option (graphql.type) = {
+            mutation: "setBoolValue"
+        };
+    }
+
+    rpc SetInt32Value(google.protobuf.Int32Value) returns (google.protobuf.Int32Value) {
+        option (graphql.type) = {
+            mutation: "setInt32Value"
+        };
+    }
+
+    rpc SetStringValue(google.protobuf.StringValue) returns (google.protobuf.StringValue) {
+        option (graphql.type) = {
+            mutation: "setStringValue"
         };
     }
 }
