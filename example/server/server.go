@@ -23,9 +23,10 @@ func (h *HelloServer) Greeting(ctx context.Context, req *sample.HelloRequest) (*
 func (h *HelloServer) SetGreeting(ctx context.Context, req *sample.Hello) (*sample.HelloResponse, error) {
 	return &sample.HelloResponse{
 		Data: &sample.Hello{
-			Name:     req.Name,
-			Type:     req.Type,
-			Messages: req.Messages,
+			Name:      req.Name,
+			Type:      req.Type,
+			Messages:  req.Messages,
+			CreatedAt: req.CreatedAt,
 		},
 	}, nil
 }

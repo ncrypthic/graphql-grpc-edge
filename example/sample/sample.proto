@@ -32,6 +32,7 @@ message Hello {
     HelloType type = 2;
     repeated string messages = 3;
     HelloSender sender = 4;
+    google.protobuf.Timestamp created_at = 5;
 }
 
 message ServerError {

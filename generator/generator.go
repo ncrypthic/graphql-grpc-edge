@@ -287,29 +287,29 @@ func (g *generator) GetFieldType(msg *unordered.Message, field *parser.Field, su
 	case "google.protobuf.Empty":
 		return &TypeInfo{Name: "Empty", Prefix: "pbEmpty", IsRepeated: field.IsRepeated}
 	case "google.protobuf.Timestamp":
-		return &TypeInfo{Name: "Timestamp", Prefix: "pbTimestamp", IsRepeated: field.IsRepeated}
+		return &TypeInfo{Name: "GraphQL_Timestamp", Prefix: "pbGraphql", IsScalar: true, IsRepeated: field.IsRepeated}
 	case "google.protobuf.Duration":
-		return &TypeInfo{Name: "Duration", Prefix: "pbDuration", IsRepeated: field.IsRepeated}
+		return &TypeInfo{Name: "GraphQL_Duration", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
 	case "google.protobuf.DoubleValue":
-		return &TypeInfo{Name: "DoubleValue", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
+		return &TypeInfo{Name: "GraphQL_DoubleValue", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
 	case "google.protobuf.FloatValue":
-		return &TypeInfo{Name: "FloatValue", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
+		return &TypeInfo{Name: "GraphQL_FloatValue", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
 	case "google.protobuf.Int64Value":
-		return &TypeInfo{Name: "Int64Value", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
+		return &TypeInfo{Name: "GraphQL_Int64Value", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
 	case "google.protobuf.UInt64Value":
-		return &TypeInfo{Name: "UInt64Value", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
+		return &TypeInfo{Name: "GraphQL_UInt64Value", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
 	case "google.protobuf.Int32Value":
-		return &TypeInfo{Name: "Int32Value", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
+		return &TypeInfo{Name: "GraphQL_Int32Value", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
 	case "google.protobuf.UInt32Value":
-		return &TypeInfo{Name: "UInt32Value", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
+		return &TypeInfo{Name: "GraphQL_UInt32Value", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
 	case "google.protobuf.BoolValue":
-		return &TypeInfo{Name: "BoolValue", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
+		return &TypeInfo{Name: "GraphQL_BoolValue", Prefix: "pbGraphql", IsRepeated: field.IsRepeated}
 	case "google.protobuf.Any":
 		fallthrough
 	case "google.protobuf.BytesValue":
 		fallthrough
 	case "google.protobuf.StringValue":
-		return &TypeInfo{Name: "StringValue", Prefix: "pbGraphql", IsRepeated: field.IsRepeated, IsNonNull: false}
+		return &TypeInfo{Name: "GraphQL_StringValue", Prefix: "pbGraphql", IsRepeated: field.IsRepeated, IsNonNull: false}
 	default:
 		info := &TypeInfo{Name: field.Type, IsScalar: false, IsRepeated: field.IsRepeated, Suffix: suffix}
 		_, isMessageEnum := g.Enums[msg.MessageName+"_"+field.Type]
