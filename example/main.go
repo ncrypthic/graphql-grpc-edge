@@ -37,13 +37,15 @@ func main() {
 		log.Fatalf("failed to connect to grpc server: %v", err)
 	}
 	testClient := sample.NewHelloTestServiceClient(grpcClient)
-	helloClient := sample.NewHelloServiceClient(grpcClient)
 	sample.RegisterTestGraphQLTypes()
 	sample.RegisterHelloTestServiceQueries(testClient)
 	sample.RegisterHelloTestServiceMutations(testClient)
+
+	helloClient := sample.NewHelloServiceClient(grpcClient)
 	sample.RegisterSampleGraphQLTypes()
 	sample.RegisterHelloServiceQueries(helloClient)
 	sample.RegisterHelloServiceMutations(helloClient)
+
 	schema, err := edge.GetSchema()
 	if err != nil {
 		log.Fatalf("failed to create new schema, error: %v", err)
