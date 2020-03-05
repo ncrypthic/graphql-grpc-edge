@@ -2,15 +2,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 
 	"github.com/graphql-go/handler"
+	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
 	"github.com/ncrypthic/graphql-grpc-edge/example/sample"
 	"github.com/ncrypthic/graphql-grpc-edge/example/server"
 	edge "github.com/ncrypthic/graphql-grpc-edge/graphql"
+	"github.com/opentracing/opentracing-go"
 	grpc "google.golang.org/grpc"
 )
 
@@ -26,13 +29,20 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(otgrpc.OpenTracingServerInterceptor(opentracing.GlobalTracer())),
+		grpc.StreamInterceptor(otgrpc.OpenTracingStreamServerInterceptor(opentracing.GlobalTracer())),
+	)
 	sample.RegisterHelloServiceServer(grpcServer, &srv)
 	sample.RegisterHelloTestServiceServer(grpcServer, &srv)
 	go grpcServer.Serve(lis)
 
 	// GraphQL Edge Server
-	grpcClient, err := grpc.Dial(GRPCPort, grpc.WithInsecure())
+	grpcClient, err := grpc.Dial(GRPCPort,
+		grpc.WithInsecure(),
+		grpc.WithUnaryInterceptor(otgrpc.OpenTracingClientInterceptor(opentracing.GlobalTracer())),
+		grpc.WithStreamInterceptor(otgrpc.OpenTracingStreamClientInterceptor(opentracing.GlobalTracer())),
+	)
 	if err != nil {
 		log.Fatalf("failed to connect to grpc server: %v", err)
 	}
@@ -56,7 +66,11 @@ func main() {
 		GraphiQL: true,
 	})
 
-	http.Handle("/graphql", h)
+	http.HandleFunc("/graphql", func(w http.ResponseWriter, req *http.Request) {
+		span, ctx := opentracing.StartSpanFromContext(context.Background(), "entrypoint")
+		defer span.Finish()
+		h.ContextHandler(ctx, w, req)
+	})
 	fmt.Printf("GraphQL gRPC edge server running on %s\n", HTTPPort)
 	http.ListenAndServe(HTTPPort, nil)
 }

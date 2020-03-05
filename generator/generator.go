@@ -352,7 +352,8 @@ package {{.PackageName}}
 import (
 	"encoding/json"
 
-	graphql "github.com/graphql-go/graphql"
+	"github.com/graphql-go/graphql"
+	opentracing "github.com/opentracing/opentracing-go"
 	{{- range $import := .Imports }}
 	{{ $import }}
 	{{- end }}
@@ -445,6 +446,8 @@ func Register{{$svc.ServiceName}}Queries(sc {{$svc.ServiceName}}Client) error {
 		},
 		Type: {{GetOutputType $query.RPCResponse.MessageType}},
 		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+			span, ctx := opentracing.StartSpanFromContext(p.Context, "{{$name}}")
+			defer span.Finish()
 			var req {{ GetBaseType $query.RPCRequest.MessageType }}
 			rawJson, err := json.Marshal(p.Args["input"])
 			if err != nil {
@@ -454,7 +457,7 @@ func Register{{$svc.ServiceName}}Queries(sc {{$svc.ServiceName}}Client) error {
 			if err != nil {
 				return nil, err
 			}
-			return sc.{{$query.RPCName}}(p.Context, &req)
+			return sc.{{$query.RPCName}}(ctx, &req)
 		},
 	})
 	{{- end }}
@@ -473,6 +476,8 @@ func Register{{$svc.ServiceName}}Mutations(sc {{$svc.ServiceName}}Client) error 
 		},
 		Type: {{GetOutputType $mutation.RPCResponse.MessageType}},
 		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+			span, ctx := opentracing.StartSpanFromContext(p.Context, "{{$name}}")
+			defer span.Finish()
 			var req {{ GetBaseType $mutation.RPCRequest.MessageType }}
 			rawJson, err := json.Marshal(p.Args["input"])
 			if err != nil {
@@ -482,7 +487,7 @@ func Register{{$svc.ServiceName}}Mutations(sc {{$svc.ServiceName}}Client) error 
 			if err != nil {
 				return nil, err
 			}
-			return sc.{{$mutation.RPCName}}(p.Context, &req)
+			return sc.{{$mutation.RPCName}}(ctx, &req)
 		},
 	})
 	{{- end }}
