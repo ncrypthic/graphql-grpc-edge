@@ -1,0 +1,16 @@
+syntax="proto3";
+
+import "graphql-grpc-edge/graphql/graphql.proto";
+
+package common.shared;
+
+enum Currency {
+    UNKNOWN = 0;
+    USD = 1;
+    IDR = 2;
+}
+
+message Money {
+    string currency = 1;
+    string amount = 2;
+}

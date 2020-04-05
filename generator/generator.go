@@ -2,6 +2,7 @@ package generator
 
 import (
 	"fmt"
+	"path"
 	"strings"
 
 	protoparser "github.com/yoheimuta/go-protoparser"
@@ -11,6 +12,9 @@ import (
 
 const (
 	OptionGraphQL string = "(graphql.type)"
+
+	ImportPrefixOption = "import_prefix"
+	ImportPathOption   = "import_path"
 )
 
 var (
@@ -65,6 +69,45 @@ var (
 	}
 )
 
+type Option interface {
+	Name() string
+	Value() string
+}
+
+type option struct {
+	name  string
+	value string
+}
+
+func (opt *option) Name() string {
+	return opt.name
+}
+
+func (opt *option) Value() string {
+	return opt.value
+}
+
+func NewOption(key, value string) Option {
+	return &option{name: key, value: value}
+}
+
+type Options []Option
+
+func (opts Options) Get(key string) (string, bool) {
+	for _, opt := range opts {
+		if opt.Name() == key {
+			return opt.Value(), true
+		}
+	}
+	return "", false
+}
+
+type Extern struct {
+	ProtoPackage string
+	ImportAlias  string
+	SourcePath   string
+}
+
 //TypeNameGenerator is function type to generate GraphQL type
 //from protobuf object type
 type TypeNameGenerator func(packageName, typeName string) string
@@ -109,7 +152,7 @@ func (t *TypeInfo) formatName() string {
 		return t.Prefix + "." + t.Name
 	}
 	if t.Prefix != "" {
-		return "GraphQL_" + t.Prefix + "." + t.Name + t.Suffix
+		return t.Prefix + ".GraphQL_" + t.Name + t.Suffix
 	}
 	return "GraphQL_" + t.Name + t.Suffix
 }
@@ -122,6 +165,8 @@ type Generator interface {
 	GetBaseType(string) string
 	GetInputType(string) string
 	GetOutputType(string) string
+	GetExternal(string) (*Extern, bool)
+	HasOperation() bool
 }
 
 type generator struct {
@@ -136,9 +181,11 @@ type generator struct {
 	Mutations         map[string]*parser.RPC
 	Services          []*unordered.Service
 	Imports           []string
+	Options           Options
+	Externals         []*Extern
 }
 
-func NewGenerator(typeNameGenerator TypeNameGenerator, baseFileName string) Generator {
+func NewGenerator(typeNameGenerator TypeNameGenerator, baseFileName string, options Options) Generator {
 	return &generator{
 		TypeNameGenerator: typeNameGenerator,
 		BaseFileName:      baseFileName,
@@ -149,6 +196,8 @@ func NewGenerator(typeNameGenerator TypeNameGenerator, baseFileName string) Gene
 		Queries:           make(map[string]*parser.RPC),
 		Mutations:         make(map[string]*parser.RPC),
 		Imports:           make([]string, 0),
+		Options:           options,
+		Externals:         make([]*Extern, 0),
 	}
 }
 
@@ -161,9 +210,15 @@ func (g *generator) FromProto(p *parser.Proto) (bool, error) {
 		importLine, ok := wellKnownTypes_imports[strings.Trim(imp.Location, `"`)]
 		if ok {
 			g.Imports = append(g.Imports, importLine)
+			continue
 		}
+		// External imports
+		g.Externals = append(g.Externals, g.GenerateExternal(imp.Location))
 	}
-	g.PackageName = proto.ProtoBody.Packages[0].Name
+	for _, ext := range g.Externals {
+		g.Imports = append(g.Imports, fmt.Sprintf(`%s "%s"`, ext.ImportAlias, ext.SourcePath))
+	}
+	g.PackageName = strings.ReplaceAll(proto.ProtoBody.Packages[0].Name, ".", "_")
 	g.Services = make([]*unordered.Service, 0)
 	for _, svc := range proto.ProtoBody.Services {
 		svcHasGraphQL := false
@@ -204,9 +259,6 @@ func (g *generator) FromProto(p *parser.Proto) (bool, error) {
 			g.Services = append(g.Services, svc)
 		}
 	}
-	if len(g.Queries) == 0 && len(g.Mutations) == 0 {
-		return false, nil
-	}
 	for _, msg := range proto.ProtoBody.Messages {
 		if _, ok := g.Inputs[msg.MessageName]; !ok {
 			g.Inputs[msg.MessageName] = msg
@@ -235,6 +287,10 @@ func (g *generator) GetInputType(typeName string) string {
 	if ok {
 		return wellKnownType
 	}
+	ext, ok := g.GetExternal(typeName)
+	if ok {
+		return ext.ImportAlias + strings.Replace(typeName, ext.ProtoPackage, "", 1) + "Input"
+	}
 	_, ok = g.Inputs[typeName]
 	if ok {
 		return "GraphQL_" + typeName + "Input"
@@ -247,11 +303,49 @@ func (g *generator) GetOutputType(typeName string) string {
 	if ok {
 		return wellKnownType
 	}
+	ext, ok := g.GetExternal(typeName)
+	if ok {
+		return ext.ImportAlias + strings.Replace(typeName, ext.ProtoPackage, "", 1)
+	}
 	_, ok = g.Objects[typeName]
 	if ok {
 		return "GraphQL_" + typeName
 	}
 	return typeName
+}
+
+func (g *generator) GetExternal(typeName string) (*Extern, bool) {
+	for _, ext := range g.Externals {
+		if strings.HasPrefix(typeName, ext.ProtoPackage) {
+			return ext, true
+		}
+	}
+	return nil, false
+}
+
+func (g *generator) GenerateExternal(location string) *Extern {
+	importPrefix, _ := g.Options.Get(ImportPrefixOption)
+	importPath, hasImportPath := g.Options.Get(ImportPathOption)
+	location = strings.Trim(location, `"`)
+	segments := strings.Split(strings.TrimSuffix(location, ".proto"), "/")
+	protoPackage := ""
+	importAlias := "pb"
+	sourcePath := ""
+	for _, segment := range segments {
+		protoPackage = protoPackage + segment + "."
+		importAlias = importAlias + strings.Title(segment)
+		sourcePath = sourcePath + segment + "/"
+	}
+	if hasImportPath && strings.HasPrefix(sourcePath, importPath) {
+		sourcePath = importPrefix + sourcePath
+	} else {
+		sourcePath = importPrefix + sourcePath
+	}
+	return &Extern{
+		ProtoPackage: protoPackage[0 : len(protoPackage)-1],
+		ImportAlias:  importAlias[0 : len(importAlias)-1],
+		SourcePath:   path.Dir(sourcePath[0 : len(sourcePath)-1]),
+	}
 }
 
 func (g *generator) GetFieldType(msg *unordered.Message, field *parser.Field, suffix string) *TypeInfo {
@@ -324,6 +418,10 @@ func (g *generator) GetFieldType(msg *unordered.Message, field *parser.Field, su
 			info.IsEnum = true
 			return info
 		}
+		if ext, ok := g.GetExternal(field.Type); ok {
+			info.Prefix = ext.ImportAlias
+			info.Name = strings.Replace(info.Name, ext.ProtoPackage+".", "", 1)
+		}
 		return info
 	}
 }
@@ -345,15 +443,23 @@ func (g *generator) GetBaseType(t string) string {
 	return t
 }
 
+func (g *generator) HasOperation() bool {
+	return len(g.Services) > 0
+}
+
 const (
 	codeTemplate string = `// DO NOT EDIT! This file is autogenerated by 'github.com/ncrypthic/graphql-grpc-edge/protoc-gen-graphql/generator'
 package {{.PackageName}}
 
 import (
+{{ if HasOperation -}}
 	"encoding/json"
 
+{{ end -}}
 	"github.com/graphql-go/graphql"
+{{ if HasOperation -}}
 	opentracing "github.com/opentracing/opentracing-go"
+{{ end -}}
 	{{- range $import := .Imports }}
 	{{ $import }}
 	{{- end }}

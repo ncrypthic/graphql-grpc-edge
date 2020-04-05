@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
@@ -12,10 +13,11 @@ import (
 )
 
 func Generate(req *plugin.CodeGeneratorRequest) (res *plugin.CodeGeneratorResponse, err error) {
+	options := GetOptions(req.GetParameter())
 	res = &plugin.CodeGeneratorResponse{}
 	for _, f := range req.GetFileToGenerate() {
 		baseFileName, fileName := generateFilename(f)
-		g := NewGenerator(DefaultNameGenerator, baseFileName)
+		g := NewGenerator(DefaultNameGenerator, baseFileName, options)
 		src, err := os.Open(f)
 		if err != nil {
 			res = withError(res, err)
@@ -41,6 +43,7 @@ func Generate(req *plugin.CodeGeneratorRequest) (res *plugin.CodeGeneratorRespon
 			"GetInputType":         g.GetInputType,
 			"GetOutputType":        g.GetOutputType,
 			"NormalizedFileName":   NormalizedFileName,
+			"HasOperation":         g.HasOperation,
 		})
 
 		tmpl, err = tmpl.Parse(codeTemplate)
@@ -82,4 +85,17 @@ func withError(res *plugin.CodeGeneratorResponse, err error) *plugin.CodeGenerat
 	msg := err.Error()
 	res.Error = &msg
 	return res
+}
+
+func GetOptions(str string) []Option {
+	options := make([]Option, 0)
+	optionSet := strings.Split(str, ",")
+	for _, opt := range optionSet {
+		packageMap := strings.Split(opt, "=")
+		if len(packageMap) != 2 {
+			continue
+		}
+		options = append(options, NewOption(packageMap[0], packageMap[1]))
+	}
+	return options
 }

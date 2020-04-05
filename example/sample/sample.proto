@@ -5,6 +5,7 @@ import "google/protobuf/empty.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/wrappers.proto";
+import "common/shared.proto";
 
 package sample;
 
@@ -51,20 +52,15 @@ message ValidationError {
 
 message HelloResponse {
     Hello data = 1;
+    common.shared.Money amount = 2;
     oneof error {
-        ServerError exception = 2;
-        ValidationError form_error = 3;
+        ServerError exception = 3;
+        ValidationError form_error = 4;
     };
 }
 
 message HelloRequest {
     string name = 1;
-}
-
-message Money {
-    string currency = 1;
-    int64 amount = 2;
-    int32 decimal = 3;
 }
 
 service HelloService {

@@ -1,4 +1,6 @@
-//go:generate protoc --go_out=plugins=grpc:. --graphql_out=. -I=../../ -I . sample/sample.proto sample/test.proto
+//go:generate protoc --go_out=plugins=grpc:. --graphql_out=:. -I ../../ -I . common/shared.proto
+//go:generate protoc --go_out=plugins=grpc,Mcommon/shared.proto=github.com/ncrypthic/graphql-grpc-edge/example/common:. --graphql_out=import_path=common,import_prefix=github.com/ncrypthic/graphql-grpc-edge/example/:. -I ../../ -I . sample/sample.proto
+//go:generate protoc --go_out=plugins=grpc:. --graphql_out=:. -I ../../ -I . sample/test.proto
 package main
 
 import (
