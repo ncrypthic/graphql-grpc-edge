@@ -51,7 +51,93 @@ It is possible to create a GraphQL server and schema to be used by frontend engi
 
 ## 4. Usage
 
+1. Install `protoc-gen-graphql` executable with `go get github.com/ncrypthic/graphql-grpc-edge/protoc-gen-graphql`.
+
+2. Import `graphql-grpc-edge/graphql/graphql.proto` protobuf file.
+
+3. Add `graphql.type` option to `service.rpc`(s) to generate graphql operation type (Query, Mutation) along with the operation name. For example:
+
+```proto
+syntax="proto3";
+
+// ...
+import "graphql-grpc-edge/graphql/graphql.proto";
+
+// ...
+service Example {
+    rpc GetSomething(GetSomethingRequest) returns(GetSomethingResponse) {
+        option (graphql.type) = {
+            // this will generate a graphql query named `getSomething` with `GetSomethingRequestInput` as its parameter
+            // and `GetSomethingResponse` object as its return type
+            query: "getSomething"
+        };
+    }
+
+    rpc MutateSomething(MutateSomethingRequest) returns(MutateSomethingResponse) {
+        option (graphql.type) = {
+            // this will generate a graphql mutation named `mutateSomething` with `MutateSomethingRequest` as its parameter
+            // and `MutateSomethingResponse` object as its return type
+            mutation: "mutateSomething"
+        };
+    }
+}
+```
+
+5. Generate golang code using `protoc --graphql_out=:. file.proto`
+
+6. Register generated graphql types, queries and mutations. Using example generated code from proto definition above:
+
+```golang
+import (
+    "github.com/graphql-go/handler"
+    edge "github.com/ncrypthic/graphql-grpc-edge/graphql"
+)
+
+// ...
+
+somePackage.RegisterExampleServiceTypes()
+somePackage.RegisterExampleServiceQueries(grpcClient)
+somePackage.RegisterExampleServiceMutations(grpcClient)
+
+gqlSchema := edge.GetSchema()
+```
+
+7. Serve the graphql schema
+
+```
+import (
+    "github.com/graphql-go/handler"
+    edge "github.com/ncrypthic/graphql-grpc-edge/graphql"
+)
+
+// ...
+
+somePackage.RegisterExampleServiceTypes()
+somePackage.RegisterExampleServiceQueries(grpcClient)
+somePackage.RegisterExampleServiceMutations(grpcClient)
+
+gqlSchema := edge.GetSchema()
+h := handler.New(&handler.Config{
+    Schema:   schema,
+    Pretty:   true,
+    GraphiQL: true,
+})
+
+http.HandleFunc("/graphql", func(w http.ResponseWriter, req *http.Request) {
+    // Optional: enable opentracing
+    span, ctx := opentracing.StartSpanFromContext(context.Background(), "entrypoint")
+    defer span.Finish()
+    // Handle graphql API
+    h.ContextHandler(ctx, w, req)
+})
+```
+
+## 5. More example
+
 See [example](example)
+
+
+## 6. License
 
 MIT License
 
