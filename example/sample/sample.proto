@@ -76,9 +76,9 @@ service HelloService {
         };
     }
 
-    rpc MetGreeting(google.protobuf.Empty) returns (google.protobuf.Empty) {
+    rpc GetGreeting(google.protobuf.Empty) returns (google.protobuf.Empty) {
         option (graphql.type) = {
-            mutation: "metGreeting"
+            mutation: "getGreeting"
         };
     }
 

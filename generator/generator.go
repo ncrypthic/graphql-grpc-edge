@@ -159,7 +159,7 @@ func (t *TypeInfo) formatName() string {
 
 //Generator is an interface of graphql code generator
 type Generator interface {
-	FromProto(*parser.Proto) (bool, error)
+	FromProto(*parser.Proto, string, string) (bool, error)
 	GetFieldType(*unordered.Message, *parser.Field, string) *TypeInfo
 	GetProtobufFieldName(string) string
 	GetBaseType(string) string
@@ -201,7 +201,7 @@ func NewGenerator(typeNameGenerator TypeNameGenerator, baseFileName string, opti
 	}
 }
 
-func (g *generator) FromProto(p *parser.Proto) (bool, error) {
+func (g *generator) FromProto(p *parser.Proto, importPrefix, packageName string) (bool, error) {
 	proto, err := protoparser.UnorderedInterpret(p)
 	if err != nil {
 		return false, err
@@ -213,12 +213,12 @@ func (g *generator) FromProto(p *parser.Proto) (bool, error) {
 			continue
 		}
 		// External imports
-		g.Externals = append(g.Externals, g.GenerateExternal(imp.Location))
+		g.Externals = append(g.Externals, g.GenerateExternal(importPrefix, imp.Location))
 	}
 	for _, ext := range g.Externals {
 		g.Imports = append(g.Imports, fmt.Sprintf(`%s "%s"`, ext.ImportAlias, ext.SourcePath))
 	}
-	g.PackageName = strings.ReplaceAll(proto.ProtoBody.Packages[0].Name, ".", "_")
+	g.PackageName = packageName
 	g.Services = make([]*unordered.Service, 0)
 	for _, svc := range proto.ProtoBody.Services {
 		svcHasGraphQL := false
@@ -323,8 +323,7 @@ func (g *generator) GetExternal(typeName string) (*Extern, bool) {
 	return nil, false
 }
 
-func (g *generator) GenerateExternal(location string) *Extern {
-	importPrefix, _ := g.Options.Get(ImportPrefixOption)
+func (g *generator) GenerateExternal(importPrefix, location string) *Extern {
 	importPath, hasImportPath := g.Options.Get(ImportPathOption)
 	location = strings.Trim(location, `"`)
 	segments := strings.Split(strings.TrimSuffix(location, ".proto"), "/")

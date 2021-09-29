@@ -7,11 +7,14 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/golang/protobuf/ptypes/wrappers"
-	"github.com/ncrypthic/graphql-grpc-edge/example/sample"
+	"github.com/ncrypthic/graphql-grpc-edge/example/grpc/sample"
 	"github.com/opentracing/opentracing-go"
 )
 
-type HelloServer struct{}
+type HelloServer struct {
+	sample.UnimplementedHelloServiceServer
+	sample.UnimplementedHelloTestServiceServer
+}
 
 func (h *HelloServer) Greeting(ctx context.Context, req *sample.HelloRequest) (*sample.HelloResponse, error) {
 	span, ctx := opentracing.StartSpanFromContext(ctx, "Greeting")
@@ -42,7 +45,7 @@ func (h *HelloServer) HelloQuery(ctx context.Context, req *sample.Test) (*sample
 	return req, nil
 }
 
-func (h *HelloServer) MetGreeting(ctx context.Context, req *empty.Empty) (*empty.Empty, error) {
+func (h *HelloServer) GetGreeting(ctx context.Context, req *empty.Empty) (*empty.Empty, error) {
 	span, ctx := opentracing.StartSpanFromContext(ctx, "SetGreeting")
 	defer span.Finish()
 	return req, nil

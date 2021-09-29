@@ -1,6 +1,4 @@
-//go:generate protoc --go_out=plugins=grpc:. --graphql_out=:. -I ../../ -I . common/shared.proto
-//go:generate protoc --go_out=plugins=grpc,Mcommon/shared.proto=github.com/ncrypthic/graphql-grpc-edge/example/common:. --graphql_out=import_path=common,import_prefix=github.com/ncrypthic/graphql-grpc-edge/example/:. -I ../../ -I . sample/sample.proto
-//go:generate protoc --go_out=plugins=grpc:. --graphql_out=:. -I ../../ -I . sample/test.proto
+//go:generate protoc --go_out=. --go_opt=module=$MODULE,Mcommon/shared.proto=$MODULE/grpc/common,Msample/sample.proto=$MODULE/grpc/sample,Msample/test.proto=$MODULE/grpc/sample --go-grpc_out=. --go-grpc_opt=module=$MODULE,Mcommon/shared.proto=$MODULE/grpc/common,Msample/sample.proto=$MODULE/grpc/sample,Msample/test.proto=$MODULE/grpc/sample --graphql_out=:. --graphql_opt=module=$MODULE,Mcommon/shared.proto=$MODULE/grpc/common,Msample/sample.proto=$MODULE/grpc/sample,Msample/test.proto=$MODULE/grpc/sample -I ../../ -I . common/shared.proto sample/sample.proto sample/test.proto
 package main
 
 import (
@@ -12,7 +10,7 @@ import (
 
 	"github.com/graphql-go/handler"
 	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
-	"github.com/ncrypthic/graphql-grpc-edge/example/sample"
+	"github.com/ncrypthic/graphql-grpc-edge/example/grpc/sample"
 	"github.com/ncrypthic/graphql-grpc-edge/example/server"
 	edge "github.com/ncrypthic/graphql-grpc-edge/graphql"
 	"github.com/opentracing/opentracing-go"
