@@ -33,6 +33,19 @@ func parseTimestampValue(value interface{}) interface{} {
 	}
 }
 
+func serializeTimestampValue(value interface{}) interface{} {
+	switch t := value.(type) {
+	case timestamp.Timestamp:
+		ti := time.Unix(t.GetSeconds(), int64(t.GetNanos()))
+		return ti.Format(jsISOString)
+	case *timestamp.Timestamp:
+		ti := time.Unix(t.GetSeconds(), int64(t.GetNanos()))
+		return ti.Format(jsISOString)
+	default:
+		return fmt.Errorf("Invalid DateTime value: %#v", value)
+	}
+}
+
 func parseTimestampLiteral(valueAST ast.Value) interface{} {
 	date, err := time.Parse(jsISOString, valueAST.GetValue().(string))
 	if err != nil {
@@ -59,6 +72,19 @@ func parseDurationValue(value interface{}) interface{} {
 	}
 }
 
+func serializeDurationValue(value interface{}) interface{} {
+	switch t := value.(type) {
+	case duration.Duration:
+		d := (time.Duration(t.GetSeconds()) * time.Second) + time.Duration(t.GetNanos())
+		return d.String()
+	case *duration.Duration:
+		d := (time.Duration(t.GetSeconds()) * time.Second) + time.Duration(t.GetNanos())
+		return d.String()
+	default:
+		return fmt.Errorf("Invalid Duration value: %#v", value)
+	}
+}
+
 func parseDurationLiteral(valueAST ast.Value) interface{} {
 	raw, err := time.ParseDuration(valueAST.GetValue().(string))
 	if err != nil {
@@ -72,7 +98,7 @@ func parseDurationLiteral(valueAST ast.Value) interface{} {
 
 var GraphQL_Empty *graphql.Scalar = graphql.NewScalar(graphql.ScalarConfig{
 	Name:         "Empty",
-	Description:  "empty value `null`",
+	Description:  "Empty accepts only `null` value",
 	ParseValue:   parseEmptyValue,
 	Serialize:    parseEmptyValue,
 	ParseLiteral: parseEmptyLiteral,
@@ -81,19 +107,21 @@ var GraphQL_Empty *graphql.Scalar = graphql.NewScalar(graphql.ScalarConfig{
 var GraphQL_Timestamp *graphql.Scalar = graphql.NewScalar(graphql.ScalarConfig{
 	Name:         "Timestamp",
 	ParseValue:   parseTimestampValue,
-	Serialize:    parseTimestampValue,
+	Serialize:    serializeTimestampValue,
 	ParseLiteral: parseTimestampLiteral,
 })
 
 var GraphQL_Duration *graphql.Scalar = graphql.NewScalar(graphql.ScalarConfig{
 	Name:         "Duration",
+	Description:  "Duration represent time duration",
 	ParseValue:   parseDurationValue,
-	Serialize:    parseDurationValue,
+	Serialize:    serializeDurationValue,
 	ParseLiteral: parseDurationLiteral,
 })
 
 var GraphQL_BoolValueInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
-	Name: "BoolValueInput",
+	Name:        "BoolValueInput",
+	Description: "BoolValueInput accept `null` or an object with field `value` with type boolean",
 	Fields: graphql.InputObjectConfigFieldMap{
 		"value": &graphql.InputObjectFieldConfig{
 			Type: graphql.Boolean,
@@ -102,7 +130,8 @@ var GraphQL_BoolValueInput *graphql.InputObject = graphql.NewInputObject(graphql
 })
 
 var GraphQL_BoolValue *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
-	Name: "BoolValue",
+	Name:        "BoolValue",
+	Description: "BoolValue returns `null` or an object with `value` field type boolean",
 	Fields: graphql.Fields{
 		"value": &graphql.Field{
 			Type: graphql.Boolean,
@@ -111,7 +140,8 @@ var GraphQL_BoolValue *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
 })
 
 var GraphQL_StringValueInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
-	Name: "StringValueInput",
+	Name:        "StringValueInput",
+	Description: "StringValueInput accepts string or null",
 	Fields: graphql.InputObjectConfigFieldMap{
 		"value": &graphql.InputObjectFieldConfig{
 			Type: graphql.String,
@@ -120,7 +150,8 @@ var GraphQL_StringValueInput *graphql.InputObject = graphql.NewInputObject(graph
 })
 
 var GraphQL_StringValue *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
-	Name: "StringValue",
+	Name:        "StringValue",
+	Description: "StringValue returns `null` or an object with `value` field typed string",
 	Fields: graphql.Fields{
 		"value": &graphql.Field{
 			Type: graphql.String,
@@ -129,7 +160,8 @@ var GraphQL_StringValue *graphql.Object = graphql.NewObject(graphql.ObjectConfig
 })
 
 var GraphQL_Int32ValueInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
-	Name: "Int32ValueInput",
+	Name:        "Int32ValueInput",
+	Description: "Int32ValueInput accepts `null` or an object with `value` field typed int32",
 	Fields: graphql.InputObjectConfigFieldMap{
 		"value": &graphql.InputObjectFieldConfig{
 			Type: graphql.Int,
@@ -138,7 +170,8 @@ var GraphQL_Int32ValueInput *graphql.InputObject = graphql.NewInputObject(graphq
 })
 
 var GraphQL_Int32Value *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
-	Name: "Int32Value",
+	Name:        "Int32Value",
+	Description: "Int32Value returns `null` or an object with `value` field typed int32",
 	Fields: graphql.Fields{
 		"value": &graphql.Field{
 			Type: graphql.Int,
@@ -147,7 +180,8 @@ var GraphQL_Int32Value *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
 })
 
 var GraphQL_UInt32ValueInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
-	Name: "UInt32ValueInput",
+	Name:        "UInt32ValueInput",
+	Description: "UInt32ValueInput accepts `null` or an object with `value` field typed uint32",
 	Fields: graphql.InputObjectConfigFieldMap{
 		"value": &graphql.InputObjectFieldConfig{
 			Type: graphql.Int,
@@ -156,7 +190,8 @@ var GraphQL_UInt32ValueInput *graphql.InputObject = graphql.NewInputObject(graph
 })
 
 var GraphQL_UInt32Value *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
-	Name: "UInt32Value",
+	Name:        "UInt32Value",
+	Description: "UInt32Value returns `null` or an object with `value` field typed uint32",
 	Fields: graphql.Fields{
 		"value": &graphql.Field{
 			Type: graphql.Int,
@@ -165,7 +200,8 @@ var GraphQL_UInt32Value *graphql.Object = graphql.NewObject(graphql.ObjectConfig
 })
 
 var GraphQL_Int64ValueInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
-	Name: "Int64ValueInput",
+	Name:        "Int64ValueInput",
+	Description: "Int64ValueInput accepts `null` or an object with `value` field typed int64",
 	Fields: graphql.InputObjectConfigFieldMap{
 		"value": &graphql.InputObjectFieldConfig{
 			Type: graphql.Int,
@@ -174,7 +210,8 @@ var GraphQL_Int64ValueInput *graphql.InputObject = graphql.NewInputObject(graphq
 })
 
 var GraphQL_Int64Value *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
-	Name: "Int64Value",
+	Name:        "Int64Value",
+	Description: "Int64Value returns `null` or an object with `value` field typed int64",
 	Fields: graphql.Fields{
 		"value": &graphql.Field{
 			Type: graphql.Int,
@@ -183,7 +220,8 @@ var GraphQL_Int64Value *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
 })
 
 var GraphQL_UInt64ValueInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
-	Name: "UInt64ValueInput",
+	Name:        "UInt64ValueInput",
+	Description: "UInt64ValueInput accepts `null` or an object with `value` field typed uint64",
 	Fields: graphql.InputObjectConfigFieldMap{
 		"value": &graphql.InputObjectFieldConfig{
 			Type: graphql.Int,
@@ -192,7 +230,8 @@ var GraphQL_UInt64ValueInput *graphql.InputObject = graphql.NewInputObject(graph
 })
 
 var GraphQL_UInt64Value *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
-	Name: "UInt64Value",
+	Name:        "UInt64Value",
+	Description: "UInt64ValueInput returns `null` or an object with `value` field typed uint64",
 	Fields: graphql.Fields{
 		"value": &graphql.Field{
 			Type: graphql.Int,
@@ -201,7 +240,8 @@ var GraphQL_UInt64Value *graphql.Object = graphql.NewObject(graphql.ObjectConfig
 })
 
 var GraphQL_FloatValueInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
-	Name: "FloatValueInput",
+	Name:        "FloatValueInput",
+	Description: "FloatValueInput accepts `null` or an object with `value` field typed float",
 	Fields: graphql.InputObjectConfigFieldMap{
 		"value": &graphql.InputObjectFieldConfig{
 			Type: graphql.Float,
@@ -210,7 +250,8 @@ var GraphQL_FloatValueInput *graphql.InputObject = graphql.NewInputObject(graphq
 })
 
 var GraphQL_FloatValue *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
-	Name: "FloatValue",
+	Name:        "FloatValue",
+	Description: "FloatValue returns `null` or an object with `value` field typed float",
 	Fields: graphql.Fields{
 		"value": &graphql.Field{
 			Type: graphql.Float,
@@ -219,7 +260,8 @@ var GraphQL_FloatValue *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
 })
 
 var GraphQL_DoubleValueInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
-	Name: "DoubleValueInput",
+	Name:        "DoubleValueInput",
+	Description: "DoubleValueInput accepts `null` or an object with `value` field typed double",
 	Fields: graphql.InputObjectConfigFieldMap{
 		"value": &graphql.InputObjectFieldConfig{
 			Type: graphql.Float,
@@ -228,7 +270,8 @@ var GraphQL_DoubleValueInput *graphql.InputObject = graphql.NewInputObject(graph
 })
 
 var GraphQL_DoubleValue *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
-	Name: "DoubleValue",
+	Name:        "DoubleValue",
+	Description: "DoubleValue accepts `null` or an object with `value` field typed double",
 	Fields: graphql.Fields{
 		"value": &graphql.Field{
 			Type: graphql.Float,

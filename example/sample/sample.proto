@@ -29,6 +29,9 @@ message HelloSender {
 }
 
 message Hello {
+    message HelloGreeting {
+        string name = 1;
+    }
     string name = 1;
     HelloType type = 2;
     repeated string messages = 3;
@@ -60,7 +63,11 @@ message HelloResponse {
 }
 
 message HelloRequest {
+    message Payload {
+        string name = 1;
+    }
     string name = 1;
+    Payload payload = 2;
 }
 
 service HelloService {

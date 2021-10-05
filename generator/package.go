@@ -2,12 +2,10 @@ package generator
 
 import (
 	"flag"
-	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
 
-	protoparser "github.com/yoheimuta/go-protoparser"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/types/pluginpb"
 )
@@ -19,27 +17,19 @@ func Generate() {
 	}.Run(func(gen *protogen.Plugin) error {
 		gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 		options := GetOptions(gen.Request.GetParameter())
-		for filePath, f := range gen.FilesByPath {
+		for _, f := range gen.Files {
 			if !f.Generate {
 				continue
 			}
 			filename := f.GeneratedFilenamePrefix + "_graphql.pb.go"
 			baseFileName := filepath.Base(f.GeneratedFilenamePrefix)
 			g := NewGenerator(DefaultNameGenerator, baseFileName, options)
-			src, err := os.Open(filePath)
-			if err != nil {
-				return err
-			}
-			proto, err := protoparser.Parse(src)
-			if err != nil {
-				return err
-			}
 			strImportPrefix := string(f.GoImportPath)
 			importPrefix := ""
 			if len(strImportPrefix) > 0 {
 				importPrefix = strings.Trim(strImportPrefix, string(f.GoPackageName))
 			}
-			if ok, err := g.FromProto(proto, importPrefix, string(f.GoPackageName)); err != nil {
+			if ok, err := g.FromProto(f.Proto, importPrefix, string(f.GoPackageName)); err != nil {
 				return err
 			} else if !ok {
 				continue
@@ -49,14 +39,17 @@ func Generate() {
 			tmpl.Funcs(template.FuncMap{
 				"GetFieldType":         g.GetFieldType,
 				"GetProtobufFieldName": g.GetProtobufFieldName,
-				"GetBaseType":          g.GetBaseType,
 				"GetInputType":         g.GetInputType,
 				"GetOutputType":        g.GetOutputType,
+				"GetEnumType":          g.GetEnumType,
+				"GetLanguageType":      g.GetLanguageType,
+				"GetObjectFields":      g.GetObjectFields,
+				"GetGraphQLTypeName":   g.GetGraphQLTypeName,
 				"NormalizedFileName":   NormalizedFileName,
 				"HasOperation":         g.HasOperation,
 			})
 
-			tmpl, err = tmpl.Parse(codeTemplate)
+			tmpl, err := tmpl.Parse(codeTemplate)
 			if err != nil {
 				return err
 			}

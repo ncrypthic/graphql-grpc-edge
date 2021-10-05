@@ -10,6 +10,7 @@ import (
 
 	"github.com/graphql-go/handler"
 	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
+	"github.com/ncrypthic/graphql-grpc-edge/example/grpc/common"
 	"github.com/ncrypthic/graphql-grpc-edge/example/grpc/sample"
 	"github.com/ncrypthic/graphql-grpc-edge/example/server"
 	edge "github.com/ncrypthic/graphql-grpc-edge/graphql"
@@ -43,6 +44,7 @@ func main() {
 		grpc.WithUnaryInterceptor(otgrpc.OpenTracingClientInterceptor(opentracing.GlobalTracer())),
 		grpc.WithStreamInterceptor(otgrpc.OpenTracingStreamClientInterceptor(opentracing.GlobalTracer())),
 	)
+	common.RegisterSharedGraphQLTypes()
 	if err != nil {
 		log.Fatalf("failed to connect to grpc server: %v", err)
 	}
