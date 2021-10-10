@@ -29,6 +29,10 @@ message HelloSender {
 }
 
 message Hello {
+    enum HelloStatus {
+        HelloUnknown = 0;
+        HelloStranger = 1;
+    }
     message HelloGreeting {
         string name = 1;
     }
@@ -37,6 +41,8 @@ message Hello {
     repeated string messages = 3;
     HelloSender sender = 4;
     google.protobuf.Timestamp created_at = 5;
+    HelloStatus status = 6;
+    map<string,bool> properties = 7;
 }
 
 message ServerError {

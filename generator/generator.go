@@ -7,6 +7,7 @@ import (
 
 	"github.com/ncrypthic/graphql-grpc-edge/graphql"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
 )
 
@@ -123,48 +124,48 @@ func DefaultNameGenerator(packageName, typeName string) string {
 }
 
 type TypeInfo struct {
-	Name        string
-	Prefix      string
-	PackageName string
-	Suffix      string
-	IsScalar    bool
-	IsRepeated  bool
-	IsEnum      bool
-	IsNonNull   bool
+	Name         string
+	Prefix       string
+	PackageName  string
+	Suffix       string
+	IsScalar     bool
+	IsRepeated   bool
+	IsNonNull    bool
+	LanguageType string
 }
 
 func (t *TypeInfo) GetName() string {
-	return t.formatRepeated()
+	return t.formatRepeated("GraphQL_")
 }
 
 func (t *TypeInfo) String() string {
-	return t.formatRepeated()
+	return t.formatRepeated("GraphQL_")
 }
 
-func (t *TypeInfo) formatRepeated() string {
+func (t *TypeInfo) formatRepeated(annotation string) string {
 	if t.IsRepeated {
-		return fmt.Sprintf(`graphql.NewList(%s)`, t.formatNonNull())
+		return fmt.Sprintf(`graphql.NewList(%s)`, t.formatNonNull(annotation))
 	} else {
-		return t.formatNonNull()
+		return t.formatNonNull(annotation)
 	}
 }
 
-func (t *TypeInfo) formatNonNull() string {
+func (t *TypeInfo) formatNonNull(annotation string) string {
 	if t.IsNonNull {
-		return fmt.Sprintf(`graphql.NewNonNull(%s)`, t.formatName())
+		return fmt.Sprintf(`graphql.NewNonNull(%s)`, t.formatName(annotation))
 	} else {
-		return t.formatName()
+		return t.formatName(annotation)
 	}
 }
 
-func (t *TypeInfo) formatName() string {
+func (t *TypeInfo) formatName(annotation string) string {
 	if t.IsScalar {
 		return t.Prefix + "." + t.PackageName + t.Name
 	}
 	if t.Prefix != "" {
 		return t.Prefix + ".GraphQL_" + t.PackageName + t.Name + t.Suffix
 	}
-	return "GraphQL_" + t.PackageName + t.Name + t.Suffix
+	return annotation + t.PackageName + t.Name + t.Suffix
 }
 
 //Generator is an interface of graphql code generator
@@ -192,6 +193,8 @@ type generator struct {
 	GoPackageName     string
 	PackageName       string
 	BaseFileName      string
+	File              *descriptorpb.FileDescriptorProto
+	Maps              map[string]*descriptorpb.DescriptorProto
 	Enums             map[string]*descriptorpb.EnumDescriptorProto
 	Objects           map[string]*descriptorpb.DescriptorProto
 	Unions            map[string]*descriptorpb.OneofDescriptorProto
@@ -213,6 +216,7 @@ func NewGenerator(typeNameGenerator TypeNameGenerator, baseFileName string, opti
 		GoPackageName:     "",
 		PackageName:       "",
 		Enums:             make(map[string]*descriptorpb.EnumDescriptorProto),
+		Maps:              make(map[string]*descriptorpb.DescriptorProto),
 		Inputs:            make(map[string]*descriptorpb.DescriptorProto),
 		Objects:           make(map[string]*descriptorpb.DescriptorProto),
 		Unions:            make(map[string]*descriptorpb.OneofDescriptorProto),
@@ -227,6 +231,7 @@ func NewGenerator(typeNameGenerator TypeNameGenerator, baseFileName string, opti
 }
 
 func (g *generator) FromProto(p *descriptorpb.FileDescriptorProto, importPrefix, packageName string) (bool, error) {
+	g.File = p
 	for _, imp := range p.Dependency {
 		importLine, ok := wellKnownTypes_imports[imp]
 		if ok {
@@ -265,7 +270,7 @@ func (g *generator) FromProto(p *descriptorpb.FileDescriptorProto, importPrefix,
 			}
 			svcHasGraphQL = true
 			fqInputType := g.FullyQualifiedName(rpc.GetInputType())
-			if inputType, ok := g.FindMessage(fqInputType, p); ok {
+			if inputType, ok := g.FindMessage(fqInputType); ok {
 				g.visitDescriptor(inputType, "", g.Inputs)
 				for _, f := range inputType.GetField() {
 					if msg, ok := g.Objects[f.GetTypeName()]; ok {
@@ -321,6 +326,10 @@ func (g *generator) visitDescriptor(d *descriptorpb.DescriptorProto, parentType 
 		g.Enums[fqmn+"_"+enum.GetName()] = enum
 	}
 	for _, nestedMsg := range d.GetNestedType() {
+		if nestedMsg.GetOptions().GetMapEntry() {
+			g.Maps[g.FullyQualifiedName(nestedMsg.GetName())] = nestedMsg
+			continue
+		}
 		g.visitDescriptor(nestedMsg, d.GetName(), targetMap)
 	}
 }
@@ -420,103 +429,298 @@ func (g *generator) isRepeatedField(field *descriptorpb.FieldDescriptorProto) bo
 	return field.GetLabel() == descriptorpb.FieldDescriptorProto_LABEL_REPEATED
 }
 
-func (g *generator) GetFieldType(msg *descriptorpb.DescriptorProto, f *descriptorpb.FieldDescriptorProto, suffix string) *TypeInfo {
+func (g *generator) GetScalarFieldType(f *descriptorpb.FieldDescriptorProto) (t *TypeInfo, ok bool) {
 	switch f.GetType() {
 	case descriptorpb.FieldDescriptorProto_TYPE_FLOAT:
 		fallthrough
 	case descriptorpb.FieldDescriptorProto_TYPE_DOUBLE:
-		return &TypeInfo{Name: "Float", Prefix: "graphql", IsScalar: true, IsRepeated: g.isRepeatedField(f), IsNonNull: true}
+		t = &TypeInfo{
+			Name:         "Float",
+			Prefix:       "graphql",
+			IsScalar:     true,
+			IsRepeated:   g.isRepeatedField(f),
+			IsNonNull:    true,
+			LanguageType: "float64",
+		}
 	case descriptorpb.FieldDescriptorProto_TYPE_INT64:
-		fallthrough
+		t = &TypeInfo{
+			Name:         "Int",
+			Prefix:       "graphql",
+			IsScalar:     true,
+			IsRepeated:   g.isRepeatedField(f),
+			IsNonNull:    true,
+			LanguageType: "int64",
+		}
 	case descriptorpb.FieldDescriptorProto_TYPE_INT32:
-		fallthrough
+		t = &TypeInfo{
+			Name:         "Int",
+			Prefix:       "graphql",
+			IsScalar:     true,
+			IsRepeated:   g.isRepeatedField(f),
+			IsNonNull:    true,
+			LanguageType: "int32",
+		}
 	case descriptorpb.FieldDescriptorProto_TYPE_UINT64:
-		fallthrough
+		t = &TypeInfo{
+			Name:         "Int",
+			Prefix:       "graphql",
+			IsScalar:     true,
+			IsRepeated:   g.isRepeatedField(f),
+			IsNonNull:    true,
+			LanguageType: "uint64",
+		}
 	case descriptorpb.FieldDescriptorProto_TYPE_UINT32:
-		fallthrough
+		t = &TypeInfo{
+			Name:         "Int",
+			Prefix:       "graphql",
+			IsScalar:     true,
+			IsRepeated:   g.isRepeatedField(f),
+			IsNonNull:    true,
+			LanguageType: "uint32",
+		}
 	case descriptorpb.FieldDescriptorProto_TYPE_SINT64:
-		fallthrough
+		t = &TypeInfo{
+			Name:         "Int",
+			Prefix:       "graphql",
+			IsScalar:     true,
+			IsRepeated:   g.isRepeatedField(f),
+			IsNonNull:    true,
+			LanguageType: "int64",
+		}
 	case descriptorpb.FieldDescriptorProto_TYPE_SINT32:
-		fallthrough
+		t = &TypeInfo{
+			Name:         "Int",
+			Prefix:       "graphql",
+			IsScalar:     true,
+			IsRepeated:   g.isRepeatedField(f),
+			IsNonNull:    true,
+			LanguageType: "int32",
+		}
 	case descriptorpb.FieldDescriptorProto_TYPE_FIXED64:
-		fallthrough
+		t = &TypeInfo{
+			Name:         "Int",
+			Prefix:       "graphql",
+			IsScalar:     true,
+			IsRepeated:   g.isRepeatedField(f),
+			IsNonNull:    true,
+			LanguageType: "int64",
+		}
 	case descriptorpb.FieldDescriptorProto_TYPE_FIXED32:
-		fallthrough
+		t = &TypeInfo{
+			Name:         "Int",
+			Prefix:       "graphql",
+			IsScalar:     true,
+			IsRepeated:   g.isRepeatedField(f),
+			IsNonNull:    true,
+			LanguageType: "int32",
+		}
 	case descriptorpb.FieldDescriptorProto_TYPE_SFIXED64:
-		fallthrough
+		t = &TypeInfo{
+			Name:         "Int",
+			Prefix:       "graphql",
+			IsScalar:     true,
+			IsRepeated:   g.isRepeatedField(f),
+			IsNonNull:    true,
+			LanguageType: "int64",
+		}
 	case descriptorpb.FieldDescriptorProto_TYPE_SFIXED32:
-		return &TypeInfo{Name: "Int", Prefix: "graphql", IsScalar: true, IsRepeated: g.isRepeatedField(f), IsNonNull: true}
+		t = &TypeInfo{
+			Name:         "Int",
+			Prefix:       "graphql",
+			IsScalar:     true,
+			IsRepeated:   g.isRepeatedField(f),
+			IsNonNull:    true,
+			LanguageType: "int64",
+		}
 	case descriptorpb.FieldDescriptorProto_TYPE_BOOL:
-		return &TypeInfo{Name: "Boolean", Prefix: "graphql", IsScalar: true, IsRepeated: g.isRepeatedField(f), IsNonNull: true}
+		t = &TypeInfo{
+			Name:         "Boolean",
+			Prefix:       "graphql",
+			IsScalar:     true,
+			IsRepeated:   g.isRepeatedField(f),
+			IsNonNull:    true,
+			LanguageType: "bool",
+		}
 	case descriptorpb.FieldDescriptorProto_TYPE_BYTES:
+		t = &TypeInfo{
+			Name:         "Boolean",
+			Prefix:       "graphql",
+			IsScalar:     true,
+			IsRepeated:   g.isRepeatedField(f),
+			IsNonNull:    true,
+			LanguageType: "[]byte",
+		}
 	case descriptorpb.FieldDescriptorProto_TYPE_STRING:
-		return &TypeInfo{Name: "String", Prefix: "graphql", IsScalar: true, IsRepeated: g.isRepeatedField(f), IsNonNull: true}
+		t = &TypeInfo{
+			Name:         "String",
+			Prefix:       "graphql",
+			IsScalar:     true,
+			IsRepeated:   g.isRepeatedField(f),
+			IsNonNull:    true,
+			LanguageType: "string",
+		}
 	}
+	return t, t != nil
+}
+
+func (g *generator) GetWellknownFieldType(msg *descriptorpb.DescriptorProto, f *descriptorpb.FieldDescriptorProto, suffix string) (t *TypeInfo, ok bool) {
 	switch f.GetTypeName() {
 	case ".google.protobuf.Empty":
-		return &TypeInfo{Name: "Empty", Prefix: "pbEmpty", IsRepeated: g.isRepeatedField(f)}
+		t = &TypeInfo{
+			Name:         "Empty",
+			Prefix:       "pbEmpty",
+			IsRepeated:   g.isRepeatedField(f),
+			LanguageType: "pbEmpty.Empty",
+		}
 	case ".google.protobuf.Timestamp":
-		return &TypeInfo{Name: "GraphQL_Timestamp", Prefix: "pbGraphql", IsScalar: true, IsRepeated: g.isRepeatedField(f)}
+		t = &TypeInfo{
+			Name:         "GraphQL_Timestamp",
+			Prefix:       "pbGraphql",
+			IsScalar:     true,
+			IsRepeated:   g.isRepeatedField(f),
+			LanguageType: "pbTimestamp.Timestamp",
+		}
 	case ".google.protobuf.Duration":
-		return &TypeInfo{Name: "GraphQL_Duration", Prefix: "pbGraphql", IsRepeated: g.isRepeatedField(f)}
+		t = &TypeInfo{
+			Name:         "GraphQL_Duration",
+			Prefix:       "pbGraphql",
+			IsScalar:     true,
+			IsRepeated:   g.isRepeatedField(f),
+			LanguageType: "pbTimestamp.Duration",
+		}
 	case ".google.protobuf.DoubleValue":
-		return &TypeInfo{Name: "GraphQL_DoubleValue", Prefix: "pbGraphql", IsRepeated: g.isRepeatedField(f)}
+		t = &TypeInfo{
+			Name:         "GraphQL_DoubleValue",
+			Prefix:       "pbGraphql",
+			IsRepeated:   g.isRepeatedField(f),
+			LanguageType: "pbWrappers.DoubleValue",
+		}
 	case ".google.protobuf.FloatValue":
-		return &TypeInfo{Name: "GraphQL_FloatValue", Prefix: "pbGraphql", IsRepeated: g.isRepeatedField(f)}
+		t = &TypeInfo{
+			Name:         "GraphQL_FloatValue",
+			Prefix:       "pbGraphql",
+			IsRepeated:   g.isRepeatedField(f),
+			LanguageType: "pbWrappers.FloatValue",
+		}
 	case ".google.protobuf.Int64Value":
-		return &TypeInfo{Name: "GraphQL_Int64Value", Prefix: "pbGraphql", IsRepeated: g.isRepeatedField(f)}
+		t = &TypeInfo{
+			Name:         "GraphQL_Int64Value",
+			Prefix:       "pbGraphql",
+			IsRepeated:   g.isRepeatedField(f),
+			LanguageType: "pbWrappers.Int64Value",
+		}
 	case ".google.protobuf.UInt64Value":
-		return &TypeInfo{Name: "GraphQL_UInt64Value", Prefix: "pbGraphql", IsRepeated: g.isRepeatedField(f)}
+		t = &TypeInfo{
+			Name:         "GraphQL_UInt64Value",
+			Prefix:       "pbGraphql",
+			IsRepeated:   g.isRepeatedField(f),
+			LanguageType: "pbWrappers.UInt64Value",
+		}
 	case ".google.protobuf.Int32Value":
-		return &TypeInfo{Name: "GraphQL_Int32Value", Prefix: "pbGraphql", IsRepeated: g.isRepeatedField(f)}
+		t = &TypeInfo{
+			Name:         "GraphQL_Int32Value",
+			Prefix:       "pbGraphql",
+			IsRepeated:   g.isRepeatedField(f),
+			LanguageType: "pbWrappers.Int32Value",
+		}
 	case ".google.protobuf.UInt32Value":
-		return &TypeInfo{Name: "GraphQL_UInt32Value", Prefix: "pbGraphql", IsRepeated: g.isRepeatedField(f)}
+		t = &TypeInfo{
+			Name:         "GraphQL_UInt32Value",
+			Prefix:       "pbGraphql",
+			IsRepeated:   g.isRepeatedField(f),
+			LanguageType: "pbWrappers.UInt32Value",
+		}
 	case ".google.protobuf.BoolValue":
-		return &TypeInfo{Name: "GraphQL_BoolValue", Prefix: "pbGraphql", IsRepeated: g.isRepeatedField(f)}
+		t = &TypeInfo{
+			Name:         "GraphQL_BoolValue",
+			Prefix:       "pbGraphql",
+			IsRepeated:   g.isRepeatedField(f),
+			LanguageType: "pbWrappers.BoolValue",
+		}
 	case ".google.protobuf.Any":
-		fallthrough
+		t = &TypeInfo{
+			Name:         "GraphQL_StringValue",
+			Prefix:       "pbGraphql",
+			IsRepeated:   g.isRepeatedField(f),
+			LanguageType: "pbWrappers.Any",
+		}
 	case ".google.protobuf.BytesValue":
-		fallthrough
+		t = &TypeInfo{
+			Name:         "GraphQL_StringValue",
+			Prefix:       "pbGraphql",
+			IsRepeated:   g.isRepeatedField(f),
+			LanguageType: "pbWrappers.BytesValue",
+		}
 	case ".google.protobuf.StringValue":
-		return &TypeInfo{Name: "GraphQL_StringValue", Prefix: "pbGraphql", IsRepeated: g.isRepeatedField(f), IsNonNull: false}
-	default:
-		nameSegments := strings.Split(f.GetTypeName(), ".")
-		name := nameSegments[len(nameSegments)-1:][0]
-		info := &TypeInfo{Name: g.GetGraphQLTypeName(f.GetTypeName()), IsScalar: false, IsRepeated: g.isRepeatedField(f), Suffix: suffix}
-		fqmn := g.FullyQualifiedName(msg.GetName())
-		_, isMessageEnum := g.Enums[fqmn+"_"+name]
-		if isMessageEnum {
-			info.Suffix = "Enum"
-			info.IsEnum = true
-			return info
+		t = &TypeInfo{
+			Name:         "GraphQL_StringValue",
+			Prefix:       "pbGraphql",
+			IsRepeated:   g.isRepeatedField(f),
+			LanguageType: "pbWrappers.StringValue",
 		}
-		_, isEnum := g.Enums[f.GetTypeName()]
-		if isEnum {
-			info.Suffix = "Enum"
-			info.IsEnum = true
-			return info
-		}
-		if ext, ok := g.GetExternal(f.GetTypeName()); ok {
-			info.Prefix = ext.ImportAlias
-		}
+	}
+	return t, t != nil
+}
+
+func (g *generator) isMapField(msg *descriptorpb.DescriptorProto, f *descriptorpb.FieldDescriptorProto) bool {
+	return f.GetLabel()
+}
+
+func (g *generator) GetFieldType(msg *descriptorpb.DescriptorProto, f *descriptorpb.FieldDescriptorProto, suffix string) *TypeInfo {
+	t, ok := g.GetScalarFieldType(f)
+	if ok {
+		return t
+	}
+	t, ok = g.GetWellknownFieldType(msg, f, suffix)
+	if ok {
+		return t
+	}
+	if g.isMapField(msg, f) {
+		panic("map found!")
+	}
+	nameSegments := strings.Split(f.GetTypeName(), ".")
+	name := nameSegments[len(nameSegments)-1:][0]
+	info := &TypeInfo{
+		Name:         g.GetGraphQLTypeName(f.GetTypeName()),
+		LanguageType: g.GetLanguageType(f.GetTypeName()),
+		IsScalar:     false,
+		IsRepeated:   g.isRepeatedField(f),
+		Suffix:       suffix,
+	}
+	fqmn := g.FullyQualifiedName(msg.GetName())
+	_, isMessageEnum := g.Enums[fqmn+"_"+name]
+	if isMessageEnum {
+		info.Suffix = "Enum"
 		return info
 	}
+	_, isEnum := g.Enums[f.GetTypeName()]
+	if isEnum {
+		info.Suffix = "Enum"
+		return info
+	}
+	if ext, ok := g.GetExternal(f.GetTypeName()); ok {
+		info.Prefix = ext.ImportAlias
+	}
+	return info
 }
 
 func (g *generator) GetObjectFields(msg *descriptorpb.DescriptorProto) *ObjectField {
 	fields := make([]*descriptorpb.FieldDescriptorProto, 0)
 	unions := make(map[string][]*descriptorpb.FieldDescriptorProto, 0)
 	for _, f := range msg.GetField() {
-		if f.OneofIndex == nil {
-			fields = append(fields, f)
+		if desc, ok := g.Maps[g.FullyQualifiedName(f.GetTypeName())]; ok && f.GetType() == descriptorpb.FieldDescriptorProto_TYPE_MESSAGE {
+
+		}
+		if f.OneofIndex != nil {
+			unionFieldName := msg.OneofDecl[f.GetOneofIndex()].GetName()
+			_, exists := unions[unionFieldName]
+			if !exists {
+				unions[unionFieldName] = make([]*descriptorpb.FieldDescriptorProto, 0)
+			}
+			unions[unionFieldName] = append(unions[unionFieldName], f)
 			continue
 		}
-		unionFieldName := msg.OneofDecl[f.GetOneofIndex()].GetName()
-		_, exists := unions[unionFieldName]
-		if !exists {
-			unions[unionFieldName] = make([]*descriptorpb.FieldDescriptorProto, 0)
-		}
-		unions[unionFieldName] = append(unions[unionFieldName], f)
+		fields = append(fields, f)
 	}
 	return &ObjectField{
 		Fields: fields,
@@ -546,10 +750,13 @@ func (g *generator) GetLanguageType(fqn string) string {
 	if ok {
 		return ext.ImportAlias + strings.Replace(fqn, ext.ProtoPackage, "", 1)
 	}
-	return strings.Replace(fqn, "."+g.PackageName, "", 1)[1:]
+	return strings.ReplaceAll(strings.Replace(fqn, "."+g.PackageName, "", 1)[1:], ".", "_")
 }
 
 func (g *generator) GetGraphQLTypeName(fqn string) string {
+	if len(fqn) == 0 {
+		return ""
+	}
 	t, ok := wellKnownTypes_base[fqn[1:]]
 	if ok {
 		return t
@@ -605,12 +812,21 @@ var GraphQL_{{ GetGraphQLTypeName $fqmn  }} *graphql.Object = graphql.NewObject(
 			Name: "{{ $field.GetName }}",
 			Type: {{ $type }},
 			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				var res interface{}
 				if pdata, ok := p.Source.(*{{ GetLanguageType $fqmn }}); ok {
-					return pdata.{{ GetProtobufFieldName $field.GetName }}, nil
+					res = pdata.{{ GetProtobufFieldName $field.GetName }}
 				} else if data, ok := p.Source.({{ GetLanguageType $fqmn }}); ok {
-					return data.{{ GetProtobufFieldName $field.GetName }}, nil
+					res = data.{{ GetProtobufFieldName $field.GetName }}
 				}
-				return nil, nil
+				if res == nil {
+					return nil, nil
+				}
+				switch t := res.(type) {
+				case {{ $type.LanguageType }}:
+					return t, nil
+				default:
+					return nil, pbGraphql.ErrBadValue
+				}
 			},
 		},
 		{{ end }}
@@ -748,8 +964,8 @@ func Register{{NormalizedFileName .BaseFileName}}GraphQLTypes() {
 }`
 )
 
-func (g *generator) FindMessage(name string, b *descriptorpb.FileDescriptorProto) (*descriptorpb.DescriptorProto, bool) {
-	for _, m := range b.GetMessageType() {
+func (g *generator) FindMessage(name string) (*descriptorpb.DescriptorProto, bool) {
+	for _, m := range g.File.GetMessageType() {
 		if g.FullyQualifiedName(m.GetName()) == name {
 			return m, true
 		}
