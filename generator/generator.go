@@ -7,7 +7,6 @@ import (
 
 	"github.com/ncrypthic/graphql-grpc-edge/graphql"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
 )
 
@@ -112,6 +111,7 @@ type Extern struct {
 type ObjectField struct {
 	Fields []*descriptorpb.FieldDescriptorProto
 	Unions map[string][]*descriptorpb.FieldDescriptorProto
+	Maps   []*descriptorpb.FieldDescriptorProto
 }
 
 //TypeNameGenerator is function type to generate GraphQL type
@@ -200,8 +200,8 @@ type generator struct {
 	Unions            map[string]*descriptorpb.OneofDescriptorProto
 	UnionFields       map[string][]*UnionField
 	Inputs            map[string]*descriptorpb.DescriptorProto
-	Queries           map[string]*descriptorpb.MethodDescriptorProto
-	Mutations         map[string]*descriptorpb.MethodDescriptorProto
+	Queries           map[string]map[string]*descriptorpb.MethodDescriptorProto
+	Mutations         map[string]map[string]*descriptorpb.MethodDescriptorProto
 	Services          []*descriptorpb.ServiceDescriptorProto
 	LanguageType      map[string]string
 	Imports           []string
@@ -221,8 +221,8 @@ func NewGenerator(typeNameGenerator TypeNameGenerator, baseFileName string, opti
 		Objects:           make(map[string]*descriptorpb.DescriptorProto),
 		Unions:            make(map[string]*descriptorpb.OneofDescriptorProto),
 		UnionFields:       make(map[string][]*UnionField),
-		Queries:           make(map[string]*descriptorpb.MethodDescriptorProto),
-		Mutations:         make(map[string]*descriptorpb.MethodDescriptorProto),
+		Queries:           make(map[string]map[string]*descriptorpb.MethodDescriptorProto),
+		Mutations:         make(map[string]map[string]*descriptorpb.MethodDescriptorProto),
 		Imports:           make([]string, 0),
 		LanguageType:      make(map[string]string),
 		Options:           options,
@@ -256,6 +256,8 @@ func (g *generator) FromProto(p *descriptorpb.FileDescriptorProto, importPrefix,
 	g.Services = make([]*descriptorpb.ServiceDescriptorProto, 0)
 	for _, svc := range p.GetService() {
 		svcHasGraphQL := false
+		svcQueries := make(map[string]*descriptorpb.MethodDescriptorProto)
+		svcMutations := make(map[string]*descriptorpb.MethodDescriptorProto)
 		for _, rpc := range svc.GetMethod() {
 			graphqlOpt := proto.GetExtension(rpc.GetOptions(), graphql.E_Type)
 			if graphqlOpt == nil {
@@ -279,15 +281,15 @@ func (g *generator) FromProto(p *descriptorpb.FileDescriptorProto, importPrefix,
 				}
 			}
 			if opName := opt.GetQuery(); opName != "" {
-				if _, existing := g.Queries[opName]; !existing {
-					g.Queries[opName] = rpc
+				if _, existing := svcQueries[opName]; !existing {
+					svcQueries[opName] = rpc
 				} else {
 					return true, fmt.Errorf("Duplicate query `%s`", opName)
 				}
 			}
 			if opName := opt.GetMutation(); opName != "" {
-				if _, existing := g.Mutations[opName]; !existing {
-					g.Mutations[opName] = rpc
+				if _, existing := svcMutations[opName]; !existing {
+					svcMutations[opName] = rpc
 				} else {
 					return true, fmt.Errorf("Duplicate mutation `%s`", opName)
 				}
@@ -295,16 +297,18 @@ func (g *generator) FromProto(p *descriptorpb.FileDescriptorProto, importPrefix,
 		}
 		if svcHasGraphQL {
 			g.Services = append(g.Services, svc)
+			g.Queries[svc.GetName()] = svcQueries
+			g.Mutations[svc.GetName()] = svcMutations
 		}
 	}
 
 	return true, nil
 }
 
-func (g *generator) visitDescriptor(d *descriptorpb.DescriptorProto, parentType string, targetMap map[string]*descriptorpb.DescriptorProto) {
+func (g *generator) visitDescriptor(d *descriptorpb.DescriptorProto, parentTypeName string, targetMap map[string]*descriptorpb.DescriptorProto) {
 	fqmn := g.FullyQualifiedName(d.GetName())
-	if parentType != "" {
-		fqmn = g.FullyQualifiedName(parentType + "_" + d.GetName())
+	if parentTypeName != "" {
+		fqmn = g.FullyQualifiedName(parentTypeName + "_" + d.GetName())
 	}
 	if _, ok := targetMap[fqmn]; !ok {
 		targetMap[fqmn] = d
@@ -323,11 +327,11 @@ func (g *generator) visitDescriptor(d *descriptorpb.DescriptorProto, parentType 
 		g.UnionFields[fqmn+"_"+union.GetName()] = fields
 	}
 	for _, enum := range d.GetEnumType() {
-		g.Enums[fqmn+"_"+enum.GetName()] = enum
+		g.Enums[fqmn+"."+enum.GetName()] = enum
 	}
 	for _, nestedMsg := range d.GetNestedType() {
 		if nestedMsg.GetOptions().GetMapEntry() {
-			g.Maps[g.FullyQualifiedName(nestedMsg.GetName())] = nestedMsg
+			g.Maps[fqmn+"."+nestedMsg.GetName()] = nestedMsg
 			continue
 		}
 		g.visitDescriptor(nestedMsg, d.GetName(), targetMap)
@@ -663,7 +667,8 @@ func (g *generator) GetWellknownFieldType(msg *descriptorpb.DescriptorProto, f *
 }
 
 func (g *generator) isMapField(msg *descriptorpb.DescriptorProto, f *descriptorpb.FieldDescriptorProto) bool {
-	return f.GetLabel()
+	_, ok := g.Maps[f.GetTypeName()]
+	return ok
 }
 
 func (g *generator) GetFieldType(msg *descriptorpb.DescriptorProto, f *descriptorpb.FieldDescriptorProto, suffix string) *TypeInfo {
@@ -675,11 +680,6 @@ func (g *generator) GetFieldType(msg *descriptorpb.DescriptorProto, f *descripto
 	if ok {
 		return t
 	}
-	if g.isMapField(msg, f) {
-		panic("map found!")
-	}
-	nameSegments := strings.Split(f.GetTypeName(), ".")
-	name := nameSegments[len(nameSegments)-1:][0]
 	info := &TypeInfo{
 		Name:         g.GetGraphQLTypeName(f.GetTypeName()),
 		LanguageType: g.GetLanguageType(f.GetTypeName()),
@@ -687,15 +687,14 @@ func (g *generator) GetFieldType(msg *descriptorpb.DescriptorProto, f *descripto
 		IsRepeated:   g.isRepeatedField(f),
 		Suffix:       suffix,
 	}
-	fqmn := g.FullyQualifiedName(msg.GetName())
-	_, isMessageEnum := g.Enums[fqmn+"_"+name]
-	if isMessageEnum {
-		info.Suffix = "Enum"
-		return info
-	}
 	_, isEnum := g.Enums[f.GetTypeName()]
 	if isEnum {
 		info.Suffix = "Enum"
+		return info
+	}
+	_, isMap := g.Maps[f.GetTypeName()]
+	if isMap {
+		info.Suffix = "Map"
 		return info
 	}
 	if ext, ok := g.GetExternal(f.GetTypeName()); ok {
@@ -707,9 +706,11 @@ func (g *generator) GetFieldType(msg *descriptorpb.DescriptorProto, f *descripto
 func (g *generator) GetObjectFields(msg *descriptorpb.DescriptorProto) *ObjectField {
 	fields := make([]*descriptorpb.FieldDescriptorProto, 0)
 	unions := make(map[string][]*descriptorpb.FieldDescriptorProto, 0)
+	maps := make([]*descriptorpb.FieldDescriptorProto, 0)
 	for _, f := range msg.GetField() {
-		if desc, ok := g.Maps[g.FullyQualifiedName(f.GetTypeName())]; ok && f.GetType() == descriptorpb.FieldDescriptorProto_TYPE_MESSAGE {
-
+		if _, ok := g.Maps[f.GetTypeName()]; ok {
+			maps = append(maps, f)
+			continue
 		}
 		if f.OneofIndex != nil {
 			unionFieldName := msg.OneofDecl[f.GetOneofIndex()].GetName()
@@ -725,6 +726,7 @@ func (g *generator) GetObjectFields(msg *descriptorpb.DescriptorProto) *ObjectFi
 	return &ObjectField{
 		Fields: fields,
 		Unions: unions,
+		Maps:   maps,
 	}
 }
 
@@ -836,6 +838,12 @@ var GraphQL_{{ GetGraphQLTypeName $fqmn  }} *graphql.Object = graphql.NewObject(
 			Type: GraphQL_{{ GetGraphQLTypeName $fqmn }}_{{ $union }}Union,
 		},
 		{{ end -}}
+		{{- range $mapField := $obj.Maps -}}
+		"{{ $mapField.GetName }}": &graphql.Field{
+			Name: "{{ $mapField.GetName }}",
+			Type: graphql.NewList(GraphQL_{{ GetGraphQLTypeName $mapField.GetTypeName }}Map),
+		},
+		{{ end -}}
 	},
 })
 {{ end }}
@@ -856,6 +864,11 @@ var GraphQL_{{ GetGraphQLTypeName $inputType }}Input *graphql.InputObject = grap
 			Type: GraphQL_{{ GetGraphQLTypeName $inputType }}_{{ $union }}Union,
 		},
 		{{ end }}
+		{{- range $mapField:= $obj.Maps -}}
+		"{{ $mapField.GetName }}": &graphql.InputObjectFieldConfig{
+			Type: graphql.NewList(GraphQL_{{ GetGraphQLTypeName $mapField.GetTypeName }}MapInput),
+		},
+		{{ end -}}
 	},
 })
 {{ end }}
@@ -866,13 +879,14 @@ var GraphQL_{{ GetGraphQLTypeName $name }}Enum *graphql.Enum = graphql.NewEnum(g
 	Values: graphql.EnumValueConfigMap{
 		{{- range $enumField := $enum.Value }}
 		"{{ $enumField.GetName }}": &graphql.EnumValueConfig{
-			Value: {{ GetEnumType $name }}_value["{{ $enumField.GetName }}"],
+			Value: {{ GetLanguageType $name }}_value["{{ $enumField.GetName }}"],
 		},
 		{{- end }}
 	},
 })
 {{ end }}
 {{- range $name,$unionFields := .UnionFields }}
+
 var GraphQL_{{ GetGraphQLTypeName $name }}Union *graphql.Union = graphql.NewUnion(graphql.UnionConfig{
 	Name: "{{ GetGraphQLTypeName $name }}Union",
 	Types: []*graphql.Object{
@@ -882,12 +896,42 @@ var GraphQL_{{ GetGraphQLTypeName $name }}Union *graphql.Union = graphql.NewUnio
 	},
 })
 {{ end }}
+{{- range $name,$map := .Maps }}
 
+var GraphQL_{{ GetGraphQLTypeName $name }}Map *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
+	Name: "{{ GetGraphQLTypeName $name }}Map",
+	Fields: graphql.Fields{
+		{{ $key := index $map.Field 0 -}}
+		{{- $value := index $map.Field 1 -}}
+		"{{ $key.GetName }}": &graphql.Field{
+			Type: {{ GetFieldType $map $key "" }},
+		},
+		"{{ $value.GetName }}": &graphql.Field{
+			Type: {{ GetFieldType $map $value "" }},
+		},
+	},
+})
+
+var GraphQL_{{ GetGraphQLTypeName $name }}MapInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
+	Name: "{{ GetGraphQLTypeName $name }}MapInput",
+	Fields: graphql.InputObjectConfigFieldMap{
+		{{ $key := index $map.Field 0 -}}
+		{{- $value := index $map.Field 1 -}}
+		"{{ $key.GetName }}": &graphql.InputObjectFieldConfig{
+			Type: {{ GetFieldType $map $key "" }},
+		},
+		"{{ $value.GetName }}": &graphql.InputObjectFieldConfig{
+			Type: {{ GetFieldType $map $value "" }},
+		},
+	},
+})
+{{ end }}
 {{- $queries := .Queries -}}
 {{- $mutations := .Mutations -}}
 {{ range $svc := .Services }}
+{{- $svcName := $svc.GetName -}}
 func Register{{ $svc.GetName }}Queries(sc {{ $svc.GetName }}Client) error {
-	{{- range $name,$query := $queries }}
+	{{- range $name,$query :=  (index $queries $svcName) }}
 	pbGraphql.RegisterQuery("{{ $name }}", &graphql.Field{
 		Name: "{{ $name }}",
 		Args: graphql.FieldConfigArgument{
@@ -917,7 +961,7 @@ func Register{{ $svc.GetName }}Queries(sc {{ $svc.GetName }}Client) error {
 }
 
 func Register{{ $svc.GetName }}Mutations(sc {{ $svc.GetName }}Client) error {
-	{{- range $name,$mutation := $mutations }}
+	{{- range $name,$mutation := (index $mutations $svcName) }}
 	pbGraphql.RegisterMutation("{{ $name }}", &graphql.Field{
 		Name: "{{ $name }}",
 		Args: graphql.FieldConfigArgument{
