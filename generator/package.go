@@ -2,6 +2,9 @@ package generator
 
 import (
 	"flag"
+	"io/ioutil"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -12,6 +15,10 @@ import (
 
 func Generate() {
 	var flags flag.FlagSet
+	goimports, err := exec.LookPath("goimports")
+	if err != nil {
+		panic(err)
+	}
 	protogen.Options{
 		ParamFunc: flags.Set,
 	}.Run(func(gen *protogen.Plugin) error {
@@ -34,6 +41,14 @@ func Generate() {
 			} else if !ok {
 				continue
 			}
+			tmp, err := os.CreateTemp(os.TempDir(), baseFileName)
+			if err != nil {
+				panic(err)
+			}
+			tmpFilePath := tmp.Name()
+			defer func() {
+				os.Remove(tmpFilePath)
+			}()
 
 			tmpl := template.New("graphql_grpc_template")
 			tmpl.Funcs(template.FuncMap{
@@ -49,15 +64,37 @@ func Generate() {
 				"HasOperation":         g.HasOperation,
 			})
 
-			tmpl, err := tmpl.Parse(codeTemplate)
+			tmpl, err = tmpl.Parse(codeTemplate)
 			if err != nil {
 				return err
+			}
+			if err != nil {
+				panic(err)
+			}
+			err = tmpl.ExecuteTemplate(tmp, "graphql_grpc_template", g)
+			if err != nil {
+				return err
+			}
+			tmp.Close()
+
+			cmd := exec.Command(goimports, "-w", tmpFilePath)
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err != nil {
+				panic(err)
+			}
+
+			err = cmd.Run()
+			if err != nil {
+				return err
+			}
+			content, err := ioutil.ReadFile(tmpFilePath)
+			if err != nil {
+				panic(err)
 			}
 			res := gen.NewGeneratedFile(filename, f.GoImportPath)
-			err = tmpl.Execute(res, g)
-			if err != nil {
-				return err
-			}
+			res.Write(content)
 		}
 		return nil
 	})

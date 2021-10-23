@@ -9,6 +9,7 @@ import (
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/ncrypthic/graphql-grpc-edge/example/grpc/sample"
 	"github.com/opentracing/opentracing-go"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type HelloServer struct {
@@ -45,10 +46,10 @@ func (h *HelloServer) HelloQuery(ctx context.Context, req *sample.Test) (*sample
 	return req, nil
 }
 
-func (h *HelloServer) GetGreeting(ctx context.Context, req *empty.Empty) (*empty.Empty, error) {
+func (h *HelloServer) GetGreeting(ctx context.Context, req *sample.Hello) (*empty.Empty, error) {
 	span, ctx := opentracing.StartSpanFromContext(ctx, "SetGreeting")
 	defer span.Finish()
-	return req, nil
+	return &emptypb.Empty{}, nil
 }
 
 func (h *HelloServer) SetDuration(ctx context.Context, req *duration.Duration) (*duration.Duration, error) {

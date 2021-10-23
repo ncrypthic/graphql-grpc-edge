@@ -11,7 +11,8 @@ import (
 )
 
 var (
-	ErrBadValue error = fmt.Errorf("invalid value")
+	ErrBadValue         error = fmt.Errorf("invalid value")
+	ErrUpstreamResponse error = fmt.Errorf("invalid upstream response")
 )
 
 const (
