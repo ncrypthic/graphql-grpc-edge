@@ -108,10 +108,18 @@ type Extern struct {
 	SourcePath   string
 }
 
+type MapEntry struct {
+	KeyField   string
+	KeyType    string
+	ValueField string
+	ValueType  string
+}
+
 type ObjectField struct {
 	Fields    []*descriptorpb.FieldDescriptorProto
 	Unions    map[string][]*descriptorpb.FieldDescriptorProto
 	Maps      []*descriptorpb.FieldDescriptorProto
+	MapTypes  map[string]MapEntry
 	HasFields bool
 }
 
@@ -719,9 +727,20 @@ func (g *generator) GetObjectFields(msg *descriptorpb.DescriptorProto) *ObjectFi
 	fields := make([]*descriptorpb.FieldDescriptorProto, 0)
 	unions := make(map[string][]*descriptorpb.FieldDescriptorProto, 0)
 	maps := make([]*descriptorpb.FieldDescriptorProto, 0)
+	mapEntry := make(map[string]MapEntry)
 	for _, f := range msg.GetField() {
-		if _, ok := g.Maps[f.GetTypeName()]; ok {
+		if t, ok := g.Maps[f.GetTypeName()]; ok {
 			maps = append(maps, f)
+			key := t.Field[0]
+			value := t.Field[1]
+			keyType := g.GetFieldType(t, key, "")
+			valueType := g.GetFieldType(t, value, "")
+			mapEntry[f.GetTypeName()] = MapEntry{
+				KeyField:   key.GetName(),
+				KeyType:    keyType.LanguageType,
+				ValueField: value.GetName(),
+				ValueType:  valueType.LanguageType,
+			}
 			continue
 		}
 		if f.OneofIndex != nil {
@@ -739,6 +758,7 @@ func (g *generator) GetObjectFields(msg *descriptorpb.DescriptorProto) *ObjectFi
 		Fields:    fields,
 		Unions:    unions,
 		Maps:      maps,
+		MapTypes:  mapEntry,
 		HasFields: len(fields) > 0 || len(unions) > 0 || len(maps) > 0,
 	}
 }
@@ -859,15 +879,7 @@ var GraphQL_{{ GetGraphQLTypeName $fqmn  }} *graphql.Object = graphql.NewObject(
 				} else if data, ok := p.Source.({{ GetLanguageType $fqmn }}); ok {
 					res = data.{{ GetProtobufFieldName $field.GetName }}
 				}
-				if res == nil {
-					return nil, nil
-				}
-				switch t := res.(type) {
-				case {{ (GetFieldType $output $field "").LanguageType }}:
-					return t, nil
-				default:
-					return nil, pbGraphql.ErrBadValue
-				}
+				return res, nil
 			},
 		},
 		{{- end }}
@@ -881,6 +893,27 @@ var GraphQL_{{ GetGraphQLTypeName $fqmn  }} *graphql.Object = graphql.NewObject(
 		"{{ $mapField.GetName }}": &graphql.Field{
 			Name: "{{ $mapField.GetName }}",
 			Type: graphql.NewList(GraphQL_{{ GetGraphQLTypeName $mapField.GetTypeName }}Map),
+			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+				var tmp interface{}
+				if pdata, ok := p.Source.(*{{ GetLanguageType $fqmn }}); ok {
+					tmp = pdata.{{ GetProtobufFieldName $mapField.GetName }}
+				} else if data, ok := p.Source.({{ GetLanguageType $fqmn }}); ok {
+					tmp = data.{{ GetProtobufFieldName $mapField.GetName }}
+				}
+				kv, ok := tmp.(map[{{ (index $obj.MapTypes $mapField.GetTypeName).KeyType }}]{{ (index $obj.MapTypes $mapField.GetTypeName).ValueType }})
+				if !ok {
+					return nil, pbGraphql.ErrBadValue
+				}
+				res := make([]interface{}, 0)
+				for key, value := range kv {
+				    rec := map[string]interface{}{
+					"key": key,
+					"value": value,
+				    }
+				    res = append(res, rec)
+				}
+				return res, nil
+			},
 		},
 		{{- end }}
 	},
