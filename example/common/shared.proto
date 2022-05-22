@@ -1,7 +1,5 @@
 syntax="proto3";
 
-import "graphql-grpc-edge/graphql/graphql.proto";
-
 package common.shared;
 
 enum Currency {

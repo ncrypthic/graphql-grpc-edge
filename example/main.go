@@ -1,4 +1,4 @@
-//go:generate protoc --go_out=. --go_opt=module=$MODULE,Mcommon/shared.proto=$MODULE/grpc/common,Msample/sample.proto=$MODULE/grpc/sample,Msample/test.proto=$MODULE/grpc/sample --go-grpc_out=. --go-grpc_opt=module=$MODULE,Mcommon/shared.proto=$MODULE/grpc/common,Msample/sample.proto=$MODULE/grpc/sample,Msample/test.proto=$MODULE/grpc/sample --graphql_out=:. --graphql_opt=module=$MODULE,Mcommon/shared.proto=$MODULE/grpc/common,Msample/sample.proto=$MODULE/grpc/sample,Msample/test.proto=$MODULE/grpc/sample -I ../../ -I . common/shared.proto sample/sample.proto sample/test.proto
+//go:generate protoc --go_out=. --go_opt=module=$MODULE,Mcommon/shared.proto=$MODULE/grpc/common,Msample/sample.proto=$MODULE/grpc/sample,Msample/test.proto=$MODULE/grpc/sample --go-grpc_out=. --go-grpc_opt=module=$MODULE,Mcommon/shared.proto=$MODULE/grpc/common,Msample/sample.proto=$MODULE/grpc/sample,Msample/test.proto=$MODULE/grpc/sample --graphql_out=. --graphql_opt=module=$MODULE,Mcommon/shared.proto=$MODULE/grpc/common,Msample/sample.proto=$MODULE/grpc/sample,Msample/test.proto=$MODULE/grpc/sample -I ../../ -I . common/shared.proto sample/sample.proto sample/test.proto
 package main
 
 import (
@@ -10,7 +10,6 @@ import (
 
 	"github.com/graphql-go/handler"
 	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
-	"github.com/ncrypthic/graphql-grpc-edge/example/grpc/common"
 	"github.com/ncrypthic/graphql-grpc-edge/example/grpc/sample"
 	"github.com/ncrypthic/graphql-grpc-edge/example/server"
 	edge "github.com/ncrypthic/graphql-grpc-edge/graphql"
@@ -44,22 +43,19 @@ func main() {
 		grpc.WithUnaryInterceptor(otgrpc.OpenTracingClientInterceptor(opentracing.GlobalTracer())),
 		grpc.WithStreamInterceptor(otgrpc.OpenTracingStreamClientInterceptor(opentracing.GlobalTracer())),
 	)
-	common.RegisterSharedGraphQLTypes()
 	if err != nil {
 		log.Fatalf("failed to connect to grpc server: %v", err)
 	}
 	testClient := sample.NewHelloTestServiceClient(grpcClient)
-	sample.RegisterTestGraphQLTypes()
 	sample.RegisterHelloTestServiceQueries(testClient)
-	sample.RegisterHelloTestServiceMutations(testClient)
 
 	helloClient := sample.NewHelloServiceClient(grpcClient)
-	sample.RegisterSampleGraphQLTypes()
 	sample.RegisterHelloServiceQueries(helloClient)
 	sample.RegisterHelloServiceMutations(helloClient)
 
 	schema, err := edge.GetSchema()
 	if err != nil {
+		panic(err.Error())
 		log.Fatalf("failed to create new schema, error: %v", err)
 	}
 	h := handler.New(&handler.Config{

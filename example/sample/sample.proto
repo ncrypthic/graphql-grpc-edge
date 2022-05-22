@@ -14,8 +14,6 @@ enum HelloType {
     ANY = 1;
 }
 
-message Blank {}
-
 message Error {
     string error_message = 1;
 }
@@ -80,7 +78,6 @@ message HelloRequest {
 
 service HelloService {
     rpc NewHello(Hello) returns (google.protobuf.Empty);
-    rpc NewHello2(Hello) returns (Blank);
 
     rpc Greeting(HelloRequest) returns (HelloResponse) {
         option (graphql.type) = {

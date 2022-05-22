@@ -1,12 +1,15 @@
 package graphql
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/golang/protobuf/ptypes/timestamp"
-	graphql "github.com/graphql-go/graphql"
+	. "github.com/graphql-go/graphql"
 	"github.com/graphql-go/graphql/language/ast"
 )
 
@@ -101,7 +104,64 @@ func parseDurationLiteral(valueAST ast.Value) interface{} {
 	}
 }
 
-var GraphQL_Empty *graphql.Scalar = graphql.NewScalar(graphql.ScalarConfig{
+func parseBytesValue(val interface{}) interface{} {
+	b, ok := val.([]byte)
+	if !ok {
+		return errors.New("invalid bytes input value")
+	}
+	return b
+}
+
+func parseBytesLiteral(valueAST ast.Value) interface{} {
+	s, ok := valueAST.GetValue().(string)
+	if !ok {
+		return errors.New("invalid bytes input value")
+	}
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return err
+	}
+	return b
+}
+
+func serializeBytesValue(value interface{}) interface{} {
+	b, ok := value.([]byte)
+	if !ok {
+		return errors.New("invalid bytes value")
+	}
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+func parseJSONValue(val interface{}) interface{} {
+	return val
+}
+
+func parseJSONLiteral(valueAST ast.Value) interface{} {
+	m := make(map[string]interface{})
+	switch t := valueAST.GetValue().(type) {
+	case string:
+		err := json.Unmarshal([]byte(t), &m)
+		if err != nil {
+			return nil
+		}
+	case []byte:
+		err := json.Unmarshal(t, &m)
+		if err != nil {
+			return nil
+		}
+	}
+	return m
+}
+
+func serializeJSONValue(value interface{}) interface{} {
+	_, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return value
+}
+
+var Scalar_emptypb_Empty *Scalar = NewScalar(ScalarConfig{
 	Name:         "Empty",
 	Description:  "Empty accepts only `null` value",
 	ParseValue:   parseEmptyValue,
@@ -109,14 +169,14 @@ var GraphQL_Empty *graphql.Scalar = graphql.NewScalar(graphql.ScalarConfig{
 	ParseLiteral: parseEmptyLiteral,
 })
 
-var GraphQL_Timestamp *graphql.Scalar = graphql.NewScalar(graphql.ScalarConfig{
+var Scalar_timestamppb_Timestamp *Scalar = NewScalar(ScalarConfig{
 	Name:         "Timestamp",
 	ParseValue:   parseTimestampValue,
 	Serialize:    serializeTimestampValue,
 	ParseLiteral: parseTimestampLiteral,
 })
 
-var GraphQL_Duration *graphql.Scalar = graphql.NewScalar(graphql.ScalarConfig{
+var Scalar_durationpb_Duration *Scalar = NewScalar(ScalarConfig{
 	Name:         "Duration",
 	Description:  "Duration represent time duration",
 	ParseValue:   parseDurationValue,
@@ -124,162 +184,298 @@ var GraphQL_Duration *graphql.Scalar = graphql.NewScalar(graphql.ScalarConfig{
 	ParseLiteral: parseDurationLiteral,
 })
 
-var GraphQL_BoolValueInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
-	Name:        "BoolValueInput",
-	Description: "BoolValueInput accept `null` or an object with field `value` with type boolean",
-	Fields: graphql.InputObjectConfigFieldMap{
-		"value": &graphql.InputObjectFieldConfig{
-			Type: graphql.Boolean,
-		},
-	},
+var Scalar_bytes *Scalar = NewScalar(ScalarConfig{
+	Name:         "bytes",
+	Description:  "base64 encoded bytes value",
+	ParseValue:   parseBytesValue,
+	Serialize:    serializeBytesValue,
+	ParseLiteral: parseBytesLiteral,
 })
 
-var GraphQL_BoolValue *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
-	Name:        "BoolValue",
-	Description: "BoolValue returns `null` or an object with `value` field type boolean",
-	Fields: graphql.Fields{
-		"value": &graphql.Field{
-			Type: graphql.Boolean,
-		},
-	},
+var Scalar_JSON *Scalar = NewScalar(ScalarConfig{
+	Name:         "JSON",
+	Description:  "JSON map object",
+	ParseValue:   parseJSONValue,
+	Serialize:    serializeJSONValue,
+	ParseLiteral: parseJSONLiteral,
 })
 
-var GraphQL_StringValueInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
-	Name:        "StringValueInput",
-	Description: "StringValueInput accepts string or null",
-	Fields: graphql.InputObjectConfigFieldMap{
-		"value": &graphql.InputObjectFieldConfig{
-			Type: graphql.String,
-		},
-	},
-})
-
-var GraphQL_StringValue *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
-	Name:        "StringValue",
-	Description: "StringValue returns `null` or an object with `value` field typed string",
-	Fields: graphql.Fields{
-		"value": &graphql.Field{
-			Type: graphql.String,
-		},
-	},
-})
-
-var GraphQL_Int32ValueInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
-	Name:        "Int32ValueInput",
-	Description: "Int32ValueInput accepts `null` or an object with `value` field typed int32",
-	Fields: graphql.InputObjectConfigFieldMap{
-		"value": &graphql.InputObjectFieldConfig{
-			Type: graphql.Int,
-		},
-	},
-})
-
-var GraphQL_Int32Value *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
-	Name:        "Int32Value",
-	Description: "Int32Value returns `null` or an object with `value` field typed int32",
-	Fields: graphql.Fields{
-		"value": &graphql.Field{
-			Type: graphql.Int,
-		},
-	},
-})
-
-var GraphQL_UInt32ValueInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
-	Name:        "UInt32ValueInput",
-	Description: "UInt32ValueInput accepts `null` or an object with `value` field typed uint32",
-	Fields: graphql.InputObjectConfigFieldMap{
-		"value": &graphql.InputObjectFieldConfig{
-			Type: graphql.Int,
-		},
-	},
-})
-
-var GraphQL_UInt32Value *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
-	Name:        "UInt32Value",
-	Description: "UInt32Value returns `null` or an object with `value` field typed uint32",
-	Fields: graphql.Fields{
-		"value": &graphql.Field{
-			Type: graphql.Int,
-		},
-	},
-})
-
-var GraphQL_Int64ValueInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
-	Name:        "Int64ValueInput",
-	Description: "Int64ValueInput accepts `null` or an object with `value` field typed int64",
-	Fields: graphql.InputObjectConfigFieldMap{
-		"value": &graphql.InputObjectFieldConfig{
-			Type: graphql.Int,
-		},
-	},
-})
-
-var GraphQL_Int64Value *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
-	Name:        "Int64Value",
-	Description: "Int64Value returns `null` or an object with `value` field typed int64",
-	Fields: graphql.Fields{
-		"value": &graphql.Field{
-			Type: graphql.Int,
-		},
-	},
-})
-
-var GraphQL_UInt64ValueInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
-	Name:        "UInt64ValueInput",
-	Description: "UInt64ValueInput accepts `null` or an object with `value` field typed uint64",
-	Fields: graphql.InputObjectConfigFieldMap{
-		"value": &graphql.InputObjectFieldConfig{
-			Type: graphql.Int,
-		},
-	},
-})
-
-var GraphQL_UInt64Value *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
-	Name:        "UInt64Value",
-	Description: "UInt64ValueInput returns `null` or an object with `value` field typed uint64",
-	Fields: graphql.Fields{
-		"value": &graphql.Field{
-			Type: graphql.Int,
-		},
-	},
-})
-
-var GraphQL_FloatValueInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
+var Input_wrapperspb_FloatValue *InputObject = NewInputObject(InputObjectConfig{
 	Name:        "FloatValueInput",
 	Description: "FloatValueInput accepts `null` or an object with `value` field typed float",
-	Fields: graphql.InputObjectConfigFieldMap{
-		"value": &graphql.InputObjectFieldConfig{
-			Type: graphql.Float,
+	Fields: InputObjectConfigFieldMap{
+		"value": &InputObjectFieldConfig{
+			Type: Float,
 		},
 	},
 })
 
-var GraphQL_FloatValue *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
+var Object_wrapperspb_FloatValue *Object = NewObject(ObjectConfig{
 	Name:        "FloatValue",
 	Description: "FloatValue returns `null` or an object with `value` field typed float",
-	Fields: graphql.Fields{
-		"value": &graphql.Field{
-			Type: graphql.Float,
+	Fields: Fields{
+		"value": &Field{
+			Type: Float,
 		},
 	},
 })
 
-var GraphQL_DoubleValueInput *graphql.InputObject = graphql.NewInputObject(graphql.InputObjectConfig{
+var Input_wrapperspb_DoubleValue *InputObject = NewInputObject(InputObjectConfig{
 	Name:        "DoubleValueInput",
 	Description: "DoubleValueInput accepts `null` or an object with `value` field typed double",
-	Fields: graphql.InputObjectConfigFieldMap{
-		"value": &graphql.InputObjectFieldConfig{
-			Type: graphql.Float,
+	Fields: InputObjectConfigFieldMap{
+		"value": &InputObjectFieldConfig{
+			Type: Float,
 		},
 	},
 })
 
-var GraphQL_DoubleValue *graphql.Object = graphql.NewObject(graphql.ObjectConfig{
+var Object_wrapperspb_DoubleValue *Object = NewObject(ObjectConfig{
 	Name:        "DoubleValue",
 	Description: "DoubleValue accepts `null` or an object with `value` field typed double",
-	Fields: graphql.Fields{
-		"value": &graphql.Field{
-			Type: graphql.Float,
+	Fields: Fields{
+		"value": &Field{
+			Type: Float,
+		},
+	},
+})
+
+var Input_wrapperspb_Int64Value *InputObject = NewInputObject(InputObjectConfig{
+	Name:        "Int64ValueInput",
+	Description: "Int64ValueInput accepts `null` or an object with `value` field typed int64",
+	Fields: InputObjectConfigFieldMap{
+		"value": &InputObjectFieldConfig{
+			Type: Int,
+		},
+	},
+})
+
+var Object_wrapperspb_Int64Value *Object = NewObject(ObjectConfig{
+	Name:        "Int64Value",
+	Description: "Int64Value returns `null` or an object with `value` field typed int64",
+	Fields: Fields{
+		"value": &Field{
+			Type: Int,
+		},
+	},
+})
+
+var Input_wrapperspb_Int32Value *InputObject = NewInputObject(InputObjectConfig{
+	Name:        "Int32ValueInput",
+	Description: "Int32ValueInput accepts `null` or an object with `value` field typed int32",
+	Fields: InputObjectConfigFieldMap{
+		"value": &InputObjectFieldConfig{
+			Type: Int,
+		},
+	},
+})
+
+var Object_wrapperspb_Int32Value *Object = NewObject(ObjectConfig{
+	Name:        "Int32Value",
+	Description: "Int32Value returns `null` or an object with `value` field typed int32",
+	Fields: Fields{
+		"value": &Field{
+			Type: Int,
+		},
+	},
+})
+
+var Input_wrapperspb_UInt64Value *InputObject = NewInputObject(InputObjectConfig{
+	Name:        "UInt64ValueInput",
+	Description: "UInt64ValueInput accepts `null` or an object with `value` field typed uint64",
+	Fields: InputObjectConfigFieldMap{
+		"value": &InputObjectFieldConfig{
+			Type: Int,
+		},
+	},
+})
+
+var Object_wrapperspb_UInt64Value *Object = NewObject(ObjectConfig{
+	Name:        "UInt64Value",
+	Description: "UInt64ValueInput returns `null` or an object with `value` field typed uint64",
+	Fields: Fields{
+		"value": &Field{
+			Type: Int,
+		},
+	},
+})
+
+var Input_wrapperspb_UInt32Value *InputObject = NewInputObject(InputObjectConfig{
+	Name:        "UInt32ValueInput",
+	Description: "UInt32ValueInput accepts `null` or an object with `value` field typed uint32",
+	Fields: InputObjectConfigFieldMap{
+		"value": &InputObjectFieldConfig{
+			Type: Int,
+		},
+	},
+})
+
+var Object_wrapperspb_UInt32Value *Object = NewObject(ObjectConfig{
+	Name:        "UInt32Value",
+	Description: "UInt32Value returns `null` or an object with `value` field typed uint32",
+	Fields: Fields{
+		"value": &Field{
+			Type: Int,
+		},
+	},
+})
+
+var Input_wrapperspb_SInt64Value *InputObject = NewInputObject(InputObjectConfig{
+	Name:        "SInt64ValueInput",
+	Description: "SInt64ValueInput accepts `null` or an object with `value` field typed uint64",
+	Fields: InputObjectConfigFieldMap{
+		"value": &InputObjectFieldConfig{
+			Type: Int,
+		},
+	},
+})
+
+var Object_wrapperspb_SInt64Value *Object = NewObject(ObjectConfig{
+	Name:        "SInt64Value",
+	Description: "SInt64ValueInput returns `null` or an object with `value` field typed uint64",
+	Fields: Fields{
+		"value": &Field{
+			Type: Int,
+		},
+	},
+})
+
+var Input_wrapperspb_SInt32Value *InputObject = NewInputObject(InputObjectConfig{
+	Name:        "SInt32ValueInput",
+	Description: "SInt32ValueInput accepts `null` or an object with `value` field typed uint32",
+	Fields: InputObjectConfigFieldMap{
+		"value": &InputObjectFieldConfig{
+			Type: Int,
+		},
+	},
+})
+
+var Object_wrapperspb_SInt32Value *Object = NewObject(ObjectConfig{
+	Name:        "SInt32Value",
+	Description: "SInt32Value returns `null` or an object with `value` field typed uint32",
+	Fields: Fields{
+		"value": &Field{
+			Type: Int,
+		},
+	},
+})
+
+var Input_wrapperspb_Fixed64Value *InputObject = NewInputObject(InputObjectConfig{
+	Name:        "Fixed64ValueInput",
+	Description: "Fixed64ValueInput accepts `null` or an object with `value` field typed uint64",
+	Fields: InputObjectConfigFieldMap{
+		"value": &InputObjectFieldConfig{
+			Type: Int,
+		},
+	},
+})
+
+var Object_wrapperspb_Fixed64Value *Object = NewObject(ObjectConfig{
+	Name:        "Fixed64Value",
+	Description: "Fixed64ValueInput returns `null` or an object with `value` field typed uint64",
+	Fields: Fields{
+		"value": &Field{
+			Type: Int,
+		},
+	},
+})
+
+var Input_wrapperspb_Fixed32Value *InputObject = NewInputObject(InputObjectConfig{
+	Name:        "Fixed32ValueInput",
+	Description: "Fixed32ValueInput accepts `null` or an object with `value` field typed uint32",
+	Fields: InputObjectConfigFieldMap{
+		"value": &InputObjectFieldConfig{
+			Type: Int,
+		},
+	},
+})
+
+var Object_wrapperspb_Fixed32Value *Object = NewObject(ObjectConfig{
+	Name:        "Fixed32Value",
+	Description: "Fixed32Value returns `null` or an object with `value` field typed uint32",
+	Fields: Fields{
+		"value": &Field{
+			Type: Int,
+		},
+	},
+})
+
+var Input_wrapperspb_SFixed64Value *InputObject = NewInputObject(InputObjectConfig{
+	Name:        "SFixed64ValueInput",
+	Description: "SFixed64ValueInput accepts `null` or an object with `value` field typed uint64",
+	Fields: InputObjectConfigFieldMap{
+		"value": &InputObjectFieldConfig{
+			Type: Int,
+		},
+	},
+})
+
+var Object_wrapperspb_SFixed64Value *Object = NewObject(ObjectConfig{
+	Name:        "SFixed64Value",
+	Description: "SFixed64ValueInput returns `null` or an object with `value` field typed uint64",
+	Fields: Fields{
+		"value": &Field{
+			Type: Int,
+		},
+	},
+})
+
+var Input_wrapperspb_SFixed32Value *InputObject = NewInputObject(InputObjectConfig{
+	Name:        "SFixed32ValueInput",
+	Description: "SFixed32ValueInput accepts `null` or an object with `value` field typed uint32",
+	Fields: InputObjectConfigFieldMap{
+		"value": &InputObjectFieldConfig{
+			Type: Int,
+		},
+	},
+})
+
+var Object_wrapperspb_SFixed32Value *Object = NewObject(ObjectConfig{
+	Name:        "SFixed32Value",
+	Description: "SFixed32Value returns `null` or an object with `value` field typed uint32",
+	Fields: Fields{
+		"value": &Field{
+			Type: Int,
+		},
+	},
+})
+
+var Input_wrapperspb_BoolValue *InputObject = NewInputObject(InputObjectConfig{
+	Name:        "BoolValueInput",
+	Description: "BoolValueInput accept `null` or an object with field `value` with type boolean",
+	Fields: InputObjectConfigFieldMap{
+		"value": &InputObjectFieldConfig{
+			Type: Boolean,
+		},
+	},
+})
+
+var Object_wrapperspb_BoolValue *Object = NewObject(ObjectConfig{
+	Name:        "BoolValue",
+	Description: "BoolValue returns `null` or an object with `value` field type boolean",
+	Fields: Fields{
+		"value": &Field{
+			Type: Boolean,
+		},
+	},
+})
+
+var Input_wrapperspb_StringValue *InputObject = NewInputObject(InputObjectConfig{
+	Name:        "StringValueInput",
+	Description: "StringValueInput accepts string or null",
+	Fields: InputObjectConfigFieldMap{
+		"value": &InputObjectFieldConfig{
+			Type: String,
+		},
+	},
+})
+
+var Object_wrapperspb_StringValue *Object = NewObject(ObjectConfig{
+	Name:        "StringValue",
+	Description: "StringValue returns `null` or an object with `value` field typed string",
+	Fields: Fields{
+		"value": &Field{
+			Type: String,
 		},
 	},
 })

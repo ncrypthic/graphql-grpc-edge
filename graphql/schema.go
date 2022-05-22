@@ -3,7 +3,7 @@ package graphql
 import (
 	"errors"
 
-	graphql "github.com/graphql-go/graphql"
+	. "github.com/graphql-go/graphql"
 )
 
 var (
@@ -12,38 +12,73 @@ var (
 )
 
 var (
-	types     []graphql.Type = make([]graphql.Type, 0)
-	queries   graphql.Fields = graphql.Fields{}
-	mutations                = graphql.Fields{}
+	typeMap   map[string]Type = make(map[string]Type)
+	types     []Type          = make([]Type, 0)
+	queries   Fields          = Fields{}
+	mutations                 = Fields{}
 )
 
 func init() {
-	RegisterType(GraphQL_Empty)
-	RegisterType(GraphQL_Duration)
-	RegisterType(GraphQL_Timestamp)
-	RegisterType(GraphQL_BoolValue)
-	RegisterType(GraphQL_BoolValueInput)
-	RegisterType(GraphQL_StringValue)
-	RegisterType(GraphQL_StringValueInput)
-	RegisterType(GraphQL_FloatValue)
-	RegisterType(GraphQL_FloatValueInput)
-	RegisterType(GraphQL_DoubleValue)
-	RegisterType(GraphQL_DoubleValueInput)
-	RegisterType(GraphQL_Int32Value)
-	RegisterType(GraphQL_Int32ValueInput)
-	RegisterType(GraphQL_UInt32Value)
-	RegisterType(GraphQL_UInt32ValueInput)
-	RegisterType(GraphQL_Int64Value)
-	RegisterType(GraphQL_Int64ValueInput)
-	RegisterType(GraphQL_UInt64Value)
-	RegisterType(GraphQL_UInt64ValueInput)
+	RegisterType(Scalar_bytes)
+	RegisterType(Scalar_durationpb_Duration)
+	RegisterType(Scalar_emptypb_Empty)
+	RegisterType(Scalar_timestamppb_Timestamp)
+	RegisterType(Object_wrapperspb_Fixed64Value)
+	RegisterType(Object_wrapperspb_SFixed64Value)
+	RegisterType(Object_wrapperspb_SInt64Value)
+	RegisterType(Object_wrapperspb_UInt64Value)
+	RegisterType(Object_wrapperspb_BoolValue)
+	RegisterType(Object_wrapperspb_DoubleValue)
+	RegisterType(Object_wrapperspb_Fixed32Value)
+	RegisterType(Object_wrapperspb_FloatValue)
+	RegisterType(Object_wrapperspb_Int32Value)
+	RegisterType(Object_wrapperspb_Int64Value)
+	RegisterType(Object_wrapperspb_SFixed32Value)
+	RegisterType(Object_wrapperspb_SInt32Value)
+	RegisterType(Object_wrapperspb_StringValue)
+	RegisterType(Object_wrapperspb_UInt32Value)
+	RegisterType(Input_wrapperspb_BoolValue)
+	RegisterType(Input_wrapperspb_DoubleValue)
+	RegisterType(Input_wrapperspb_Fixed64Value)
+	RegisterType(Input_wrapperspb_FloatValue)
+	RegisterType(Input_wrapperspb_Int32Value)
+	RegisterType(Input_wrapperspb_SFixed64Value)
+	RegisterType(Input_wrapperspb_SInt64Value)
+	RegisterType(Input_wrapperspb_StringValue)
+	RegisterType(Input_wrapperspb_UInt64Value)
+	RegisterType(Input_wrapperspb_Fixed32Value)
+	RegisterType(Input_wrapperspb_Int64Value)
+	RegisterType(Input_wrapperspb_SFixed32Value)
+	RegisterType(Input_wrapperspb_SInt32Value)
+	RegisterType(Input_wrapperspb_UInt32Value)
 }
 
-func RegisterType(newType graphql.Type) {
-	types = append(types, newType)
+func RegisterType(newType Type) {
+	name := newType.Name()
+	_, exists := typeMap[name]
+	if !exists {
+		types = append(types, newType)
+		typeMap[name] = newType
+		return
+	}
+	for idx, t := range types {
+		if t.Name() == name {
+			types[idx] = newType
+			return
+		}
+	}
 }
 
-func RegisterQuery(name string, field *graphql.Field) error {
+func LookupType(name string) (Type, bool) {
+	for _, t := range types {
+		if t.Name() == name {
+			return t, true
+		}
+	}
+	return nil, false
+}
+
+func RegisterQuery(name string, field *Field) error {
 	if _, exist := queries[name]; exist {
 		return ErrDuplicateQuery
 	}
@@ -52,7 +87,7 @@ func RegisterQuery(name string, field *graphql.Field) error {
 	return nil
 }
 
-func RegisterMutation(name string, field *graphql.Field) error {
+func RegisterMutation(name string, field *Field) error {
 	if _, exist := mutations[name]; exist {
 		return ErrDuplicateMutation
 	}
@@ -61,14 +96,14 @@ func RegisterMutation(name string, field *graphql.Field) error {
 	return nil
 }
 
-func GetSchema() (*graphql.Schema, error) {
-	rootQuery := graphql.ObjectConfig{Name: "RootQuery", Fields: queries}
-	rootMutation := graphql.ObjectConfig{Name: "RootMutation", Fields: mutations}
-	schemaConfig := graphql.SchemaConfig{
-		Query:    graphql.NewObject(rootQuery),
-		Mutation: graphql.NewObject(rootMutation),
+func GetSchema() (*Schema, error) {
+	rootQuery := ObjectConfig{Name: "RootQuery", Fields: queries}
+	rootMutation := ObjectConfig{Name: "RootMutation", Fields: mutations}
+	schemaConfig := SchemaConfig{
+		Query:    NewObject(rootQuery),
+		Mutation: NewObject(rootMutation),
 		Types:    types,
 	}
-	schema, err := graphql.NewSchema(schemaConfig)
+	schema, err := NewSchema(schemaConfig)
 	return &schema, err
 }

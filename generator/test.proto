@@ -1,0 +1,87 @@
+syntax="proto3";
+
+import "graphql-grpc-edge/graphql/graphql.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+package generator;
+
+option go_package="github.com/ncrypthic/graphql-grpc-edge/generator";
+
+enum UserStatus {
+    UNKNOWN_USER_STATE = 0;
+    REGISTERED = 1;
+    UNREGISTERED = 2;
+}
+
+message TestScalar {
+    string field1 = 1;
+    bool field2 = 2;
+    int32 field3 = 3;
+    int64 field4 = 4;
+    float field5 = 5;
+    double field6 = 6;
+    uint32 field7 = 7;
+    uint64 field8 = 8;
+    sint32 field9 = 9;
+    sint64 field10 = 10;
+    fixed32 field11 = 11;
+    fixed64 field12 = 12;
+    sfixed32 field13 = 13;
+    sfixed64 field14 = 14;
+}
+
+message Test {
+    enum Country {
+        UNSUPPORTED = 0;
+        INDONESIA = 1;
+        UNITED_STATES = 2;
+    }
+    message TestDetail {
+        string name = 1;
+        bytes photo = 2;
+    }
+    message TestClientError {
+        string msg = 1;
+    }
+    message TestServerError {
+        string msg = 1;
+    }
+    string name = 1;
+    google.protobuf.StringValue maybeString = 2;
+    Test.TestDetail detail = 3;
+    Country country = 4;
+    UserStatus state = 5;
+    google.protobuf.Timestamp created_at = 6;
+    google.protobuf.Duration last_session = 7;
+    map<string, string> attributes = 8;
+    oneof error {
+        TestClientError client = 9;
+        TestServerError server = 10;
+    }
+}
+
+message TestRepeated {
+    repeated string tags = 1;
+    repeated google.protobuf.Timestamp failed_attempts = 2;
+    repeated UserStatus history = 3;
+}
+
+service TestService {
+    rpc Hello(Test) returns(google.protobuf.Empty);
+}
+
+service HelloTestService {
+    rpc HelloQuery(Test) returns(Test) {
+        option (graphql.type) = {
+            query: "hello"
+        };
+    };
+    rpc HelloMutation(Test) returns(google.protobuf.Empty) {
+        option (graphql.type) = {
+            mutation: "mutateHello"
+        };
+    };
+}
