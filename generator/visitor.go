@@ -163,67 +163,184 @@ func (v *visitor) VisitOneOf(root *Symbol, p *protogen.Oneof, typ GQLType) {
 	}
 	v.Exit()
 	v.P("},")
+	gqlResolveTypeParams := protogen.GoIdent{
+		GoName:       "ResolveTypeParams",
+		GoImportPath: graphqlImport,
+	}
+	v.P("ResolveType: func(p ", gqlResolveTypeParams, ") *", gqlObject, "{")
+	v.Enter()
+	v.P("switch p.Value.(type) {")
+	for _, f := range p.Fields {
+		v.P("case *", f.Message.GoIdent, ":")
+		v.Enter()
+		v.P("return ", v.getEdgeType(f.Desc.Kind(), f.GoIdent, f, typ), "")
+		v.Exit()
+	}
+	v.P("default:")
+	v.Enter()
+	v.P("return nil")
+	v.Exit()
+	v.P("}")
+	v.Exit()
+	v.P("},")
 	v.Exit()
 	v.P("})")
 }
 
 func (v *visitor) VisitOneOfField(root *Symbol, o *protogen.Oneof, typ GQLType) {
+	gqlResolveParams := goIdent(graphqlImport, "ResolveParams")
 	v.P(quot(string(o.Desc.Name())), ": &", goIdent(graphqlImport, "Field{"))
 	v.Enter()
 	v.P("Type: ", typ, "_", o.GoIdent, ",")
+	v.P("Resolve: func(p ", gqlResolveParams, ") (interface{}, error) {")
+	v.Enter()
+	{
+		v.P("if pdata, ok := p.Source.(*", o.Parent.GoIdent, "); ok {")
+		v.Enter()
+		{
+			v.P("data := pdata.", o.GoName)
+			for _, f := range o.Fields {
+				v.P("if d, ok := data.(*", f.GoIdent, "); ok {")
+				v.Enter()
+				{
+					v.P("return d.", f.GoName, ", nil")
+				}
+				v.Exit()
+				v.P("}")
+			}
+		}
+		v.Exit()
+		v.P("}")
+		v.P("return nil, nil")
+	}
+	v.Exit()
+	v.P("},")
 	v.Exit()
 	v.P("},")
 }
 
 func (v *visitor) VisitField(symbol *Symbol, p *protogen.Field, typ GQLType) {
+	isList := p.Desc.IsList()
+	isEnum := p.Enum != nil
+	isMap := p.Desc.IsMap()
+	switch {
+	case isMap:
+		v.visitMapField(symbol, p, typ)
+	case isEnum:
+		v.visitEnumField(symbol, p, typ, isList)
+	default:
+		v.visitGeneralField(symbol, p, typ, isList)
+	}
+}
+
+func (v *visitor) visitEnumField(symbol *Symbol, p *protogen.Field, typ GQLType, isList bool) {
 	fieldType := v.getEdgeType(p.Desc.Kind(), p.GoIdent, p, typ)
 	gqlField := goIdent(graphqlImport, "Field")
+	gqlList := goIdent(graphqlImport, "NewList")
+	gqlResolveParams := goIdent(graphqlImport, "ResolveParams")
 	if typ == GQLTypeInput {
 		gqlField = goIdent(graphqlImport, "InputObjectFieldConfig")
 	}
 	v.P(quot(p.Desc.JSONName()), ": &", gqlField, "{")
 	v.Enter()
-	switch {
-	case p.Desc.IsMap():
-		gqlJson := goIdent(edgeImport, "Scalar_JSON")
-		v.P("Type: ", gqlJson, ",")
-	case p.Desc.IsList():
-		gqlList := protogen.GoIdent{
-			GoName:       "NewList",
-			GoImportPath: graphqlImport,
-		}
+	if isList {
 		v.P("Type: ", gqlList, "(", fieldType, "),")
-	default:
+	} else {
 		v.P("Type: ", fieldType, ",")
 	}
-	if typ == GQLTypeInput {
+	if typ == GQLTypeObject {
+		v.P("Resolve: func(p ", gqlResolveParams, ") (interface{}, error) {")
+		v.Enter()
+		{
+			v.P("var res interface{}")
+			v.P("if pdata, ok := p.Source.(*", p.Parent.GoIdent, "); ok {")
+			v.Enter()
+			{
+				v.P("res = pdata.", p.GoName, ".String()")
+			}
+			v.Exit()
+			v.P("}")
+			v.P("return res, nil")
+		}
 		v.Exit()
 		v.P("},")
-		return
 	}
-	gqlResolveParams := protogen.GoIdent{
-		GoName:       "ResolveParams",
-		GoImportPath: graphqlImport,
-	}
-	stringer := ""
-	if p.Enum != nil {
-		stringer = ".String()"
-	}
-	v.P("Resolve: func(p ", gqlResolveParams, ") (interface{}, error) {")
-	v.Enter()
-	v.P("var res interface{}")
-	v.P("if pdata, ok := p.Source.(*", p.Parent.GoIdent, "); ok {")
-	v.Enter()
-	v.P("res = pdata.", p.GoName, stringer)
-	v.Exit()
-	v.P("} else if data, ok := p.Source.(", p.Parent.GoIdent, "); ok {")
-	v.Enter()
-	v.P("res = data.", p.GoName, stringer)
-	v.Exit()
-	v.P("}")
-	v.P("return res, nil")
 	v.Exit()
 	v.P("},")
+}
+
+func (v *visitor) visitOneOfField(symbol *Symbol, p *protogen.Field, typ GQLType, isList bool) {
+	fieldType := v.getEdgeType(p.Desc.Kind(), p.GoIdent, p, typ)
+	gqlField := goIdent(graphqlImport, "Field")
+	gqlList := goIdent(graphqlImport, "NewList")
+	gqlResolveParams := goIdent(graphqlImport, "ResolveParams")
+	if typ == GQLTypeInput {
+		gqlField = goIdent(graphqlImport, "InputObjectFieldConfig")
+	}
+	v.P(quot(p.Desc.JSONName()), ": &", gqlField, "{")
+	v.Enter()
+	if isList {
+		v.P("Type: ", gqlList, "(", fieldType, "),")
+	} else {
+		v.P("Type: ", fieldType, ",")
+	}
+	if typ == GQLTypeObject {
+		v.P("Resolve: func(p ", gqlResolveParams, ") (interface{}, error) {")
+		v.Enter()
+		{
+		}
+		v.Exit()
+		v.P("},")
+	}
+	v.Exit()
+	v.P("},")
+}
+
+func (v *visitor) visitMapField(symbol *Symbol, p *protogen.Field, typ GQLType) {
+	gqlField := goIdent(graphqlImport, "Field")
+	gqlJson := goIdent(edgeImport, "Scalar_JSON")
+	if typ == GQLTypeInput {
+		gqlField = goIdent(graphqlImport, "InputObjectFieldConfig")
+	}
+	v.P(quot(p.Desc.JSONName()), ": &", gqlField, "{")
+	v.Enter()
+	v.P("Type: ", gqlJson, ",")
+	v.Exit()
+	v.P("},")
+}
+
+func (v *visitor) visitGeneralField(symbol *Symbol, p *protogen.Field, typ GQLType, isList bool) {
+	fieldType := v.getEdgeType(p.Desc.Kind(), p.GoIdent, p, typ)
+	gqlField := goIdent(graphqlImport, "Field")
+	gqlList := goIdent(graphqlImport, "NewList")
+	gqlResolveParams := goIdent(graphqlImport, "ResolveParams")
+	if typ == GQLTypeInput {
+		gqlField = goIdent(graphqlImport, "InputObjectFieldConfig")
+	}
+	v.P(quot(p.Desc.JSONName()), ": &", gqlField, "{")
+	v.Enter()
+	if isList {
+		v.P("Type: ", gqlList, "(", fieldType, "),")
+	} else {
+		v.P("Type: ", fieldType, ",")
+	}
+	if typ == GQLTypeObject {
+		v.P("Resolve: func(p ", gqlResolveParams, ") (interface{}, error) {")
+		v.Enter()
+		{
+			v.P("var res interface{}")
+			v.P("if pdata, ok := p.Source.(*", p.Parent.GoIdent, "); ok {")
+			v.Enter()
+			{
+				v.P("res = pdata.", p.GoName)
+			}
+			v.Exit()
+			v.P("}")
+			v.P("return res, nil")
+		}
+		v.Exit()
+		v.P("},")
+	}
 	v.Exit()
 	v.P("},")
 }
