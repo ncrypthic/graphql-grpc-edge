@@ -205,16 +205,20 @@ func (v *visitor) VisitField(symbol *Symbol, p *protogen.Field, typ GQLType) {
 		GoName:       "ResolveParams",
 		GoImportPath: graphqlImport,
 	}
+	stringer := ""
+	if p.Enum != nil {
+		stringer = ".String()"
+	}
 	v.P("Resolve: func(p ", gqlResolveParams, ") (interface{}, error) {")
 	v.Enter()
 	v.P("var res interface{}")
 	v.P("if pdata, ok := p.Source.(*", p.Parent.GoIdent, "); ok {")
 	v.Enter()
-	v.P("res = pdata.", p.GoName)
+	v.P("res = pdata.", p.GoName, stringer)
 	v.Exit()
 	v.P("} else if data, ok := p.Source.(", p.Parent.GoIdent, "); ok {")
 	v.Enter()
-	v.P("res = data.", p.GoName)
+	v.P("res = data.", p.GoName, stringer)
 	v.Exit()
 	v.P("}")
 	v.P("return res, nil")
@@ -249,7 +253,7 @@ func (v *visitor) VisitEnum(parent *Symbol, p *protogen.Enum) {
 	for _, val := range p.Values {
 		v.P(quot(string(val.Desc.Name())), ": &", gqlEnumValueConfig, "{")
 		v.Enter()
-		v.P("Value: ", val.Parent.GoIdent.GoName, "_value[", quot(string(val.Desc.Name())), "],")
+		v.P("Value: ", val.Parent.GoIdent.GoName, "_name[", val.Desc.Index(), "],")
 		v.Exit()
 		v.P("},")
 	}
@@ -403,7 +407,7 @@ func (v *visitor) VisitService(symbol *Symbol, p *protogen.Service) {
 
 func (v *visitor) visitMethod(symbol *Symbol, p *protogen.Method, optionName string, methodType GQLType) {
 	jsonMarshal := goIdent("encoding/json", "Marshal")
-	jsonUnmarshal := goIdent("encoding/json", "Unmarshal")
+	jsonUnmarshal := goIdent("google.golang.org/protobuf/encoding/protojson", "Unmarshal")
 	gqlField := goIdent(graphqlImport, "Field")
 	switch methodType {
 	case GQLTypeQuery:
